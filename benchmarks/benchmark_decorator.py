@@ -41,7 +41,7 @@ def decorated_index(
 
 
 def run_benchmark(
-  func: Any,
+  func: Any,  # noqa: ANN401
   data: pd.Series,
   skip_val: bool | None,
   iterations: int,
