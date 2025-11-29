@@ -1,22 +1,25 @@
 """pdval - Pandas validation using Annotated types and decorators."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from pdval.validation import (
-  Datetime,  # Changed from DateTimeIndexed
+  Datetime,
   Finite,
   Ge,
   Gt,
   HasColumn,
   HasColumns,
-  Index,  # Added
+  Index,
+  IsDtype,
   Le,
   Lt,
   MonoDown,
   MonoUp,
   NonNaN,
   NonNegative,
+  NoTimeGaps,
   Positive,
+  UniqueIndex,
   Validated,
   Validator,
   validated,
@@ -30,13 +33,16 @@ __all__ = [
   "HasColumn",
   "HasColumns",
   "Index",
+  "IsDtype",
   "Le",
   "Lt",
   "MonoDown",
   "MonoUp",
+  "NoTimeGaps",
   "NonNaN",
   "NonNegative",
   "Positive",
+  "UniqueIndex",
   "Validated",
   "Validator",
   "__version__",
