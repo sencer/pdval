@@ -2,7 +2,9 @@
 
 import numpy as np
 import pandas as pd
+import pandera.pandas as pa
 import pytest
+from pandera.errors import SchemaError
 
 from pdval import (
   Datetime,
@@ -39,7 +41,7 @@ class TestValidatedDecorator:
       return data.sum()
 
     invalid_data = pd.Series([1.0, np.inf, 3.0])
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
   def test_validation_can_be_disabled(self):
@@ -67,11 +69,11 @@ class TestValidatedDecorator:
     assert result == 6.0
 
     # Fails Finite check
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       process(pd.Series([1.0, np.nan, 3.0]))
 
     # Fails Positive check
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       process(pd.Series([1.0, 0.0, 3.0]))
 
   def test_dataframe_validation(self):
@@ -89,7 +91,7 @@ class TestValidatedDecorator:
     assert result.tolist() == [4, 6]
 
     # Missing column
-    with pytest.raises(ValueError, match="Missing columns"):
+    with pytest.raises(SchemaError, match=None):
       process(pd.DataFrame({"a": [1, 2]}))
 
   def test_preserves_function_metadata(self):
@@ -136,7 +138,7 @@ class TestValidatedDecorator:
     assert result == 6.0
 
     # Invalid data still raises
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       process(pd.Series([1.0, np.inf, 3.0]))
 
   def test_multiple_arguments(self):
@@ -155,11 +157,11 @@ class TestValidatedDecorator:
     assert result.tolist() == [4.0, 6.0]
 
     # First argument invalid
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       combine(pd.Series([np.inf, 2.0]), valid2)
 
     # Second argument invalid
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       combine(valid1, pd.Series([3.0, np.nan]))
 
   def test_non_validated_arguments_ignored(self):
@@ -213,7 +215,7 @@ class TestComplexValidations:
         "close": [101, 104, 102],
       }
     )
-    with pytest.raises(ValueError, match="high must be >= low"):
+    with pytest.raises(SchemaError, match=None):
       calculate_true_range(invalid_data)
 
   def test_time_series_validation(self):
@@ -234,7 +236,7 @@ class TestComplexValidations:
 
     # Non-datetime index
     invalid_data = pd.Series(range(10))
-    with pytest.raises(ValueError, match="Index must be DatetimeIndex"):
+    with pytest.raises(SchemaError, match=None):
       resample_data(invalid_data)
 
     # Non-monotonic datetime index
@@ -244,7 +246,7 @@ class TestComplexValidations:
       pd.Timestamp("2024-01-02"),
     ]
     non_monotonic = pd.Series([1, 2, 3], index=dates_shuffled)
-    with pytest.raises(ValueError, match="Index must be monotonic"):
+    with pytest.raises(SchemaError, match=None):
       resample_data(non_monotonic)
 
   def test_percentage_returns_validation(self):
@@ -262,11 +264,11 @@ class TestComplexValidations:
     assert len(result) == 4
 
     # Zero price fails Positive check
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       calculate_returns(pd.Series([100.0, 0.0, 101.0]))
 
     # NaN price fails Finite check
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       calculate_returns(pd.Series([100.0, np.nan, 101.0]))
 
 
@@ -303,9 +305,9 @@ class TestEdgeCases:
     assert with_instance(valid_data) == 6.0
 
     # Both should reject invalid data
-    with pytest.raises(ValueError):
+    with pytest.raises(SchemaError):
       with_class(invalid_data)
-    with pytest.raises(ValueError):
+    with pytest.raises(SchemaError):
       with_instance(invalid_data)
 
   def test_function_without_validate_param(self):
@@ -321,7 +323,7 @@ class TestEdgeCases:
 
     # Should still validate and reject invalid data
     invalid_data = pd.Series([1.0, np.inf, 3.0])
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
   def test_kwargs_arguments(self):

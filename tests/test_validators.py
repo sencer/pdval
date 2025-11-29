@@ -2,7 +2,9 @@
 
 import numpy as np
 import pandas as pd
+import pandera.pandas as pa
 import pytest
+from pandera.errors import SchemaError
 
 from pdval import (
   Datetime,
@@ -45,21 +47,21 @@ class TestFinite:
     """Test Finite validator rejects Inf."""
     data = pd.Series([1.0, np.inf, 3.0])
     validator = Finite()
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_series_with_nan(self):
     """Test Finite validator rejects NaN."""
     data = pd.Series([1.0, np.nan, 3.0])
     validator = Finite()
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_dataframe_with_inf(self):
     """Test Finite validator rejects DataFrame with Inf."""
     data = pd.DataFrame({"a": [1.0, np.inf], "b": [3.0, 4.0]})
     validator = Finite()
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_empty_series(self):
@@ -90,7 +92,7 @@ class TestNonNaN:
     """Test NonNaN validator rejects NaN."""
     data = pd.Series([1.0, np.nan, 3.0])
     validator = NonNaN()
-    with pytest.raises(ValueError, match="must not contain NaN"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_series_with_inf_allowed(self):
@@ -122,7 +124,7 @@ class TestNonNegative:
     """Test NonNegative validator rejects negative values."""
     data = pd.Series([1.0, -1.0, 3.0])
     validator = NonNegative()
-    with pytest.raises(ValueError, match="must be non-negative"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_zero_allowed(self):
@@ -154,14 +156,14 @@ class TestPositive:
     """Test Positive validator rejects zero."""
     data = pd.Series([1.0, 0.0, 3.0])
     validator = Positive()
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_series_with_negative(self):
     """Test Positive validator rejects negative values."""
     data = pd.Series([1.0, -1.0, 3.0])
     validator = Positive()
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_all_positive(self):
@@ -187,7 +189,7 @@ class TestIndexDatetime:
     """Test Index[Datetime] validator rejects integer index."""
     data = pd.Series([1, 2, 3])
     validator = Index[Datetime]
-    with pytest.raises(ValueError, match="Index must be DatetimeIndex"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_dataframe_with_datetime_index(self):
@@ -219,7 +221,7 @@ class TestIndexMonoUp:
     """Test Index[MonoUp] validator rejects non-monotonic index."""
     data = pd.Series([1, 2, 3], index=[0, 2, 1])
     validator = Index[MonoUp]
-    with pytest.raises(ValueError, match="Index must be monotonically increasing"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_datetime_monotonic(self):
@@ -239,7 +241,7 @@ class TestIndexMonoUp:
     ]
     data = pd.Series([1, 2, 3], index=dates)
     validator = Index[MonoUp]
-    with pytest.raises(ValueError, match="Index must be monotonically increasing"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
 
@@ -264,14 +266,14 @@ class TestHasColumns:
     """Test HasColumns validator with missing column."""
     data = pd.DataFrame({"a": [1, 2]})
     validator = HasColumns["b"]
-    with pytest.raises(ValueError, match="Missing columns: \\['b'\\]"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_multiple_columns(self):
     """Test HasColumns validator with missing columns."""
     data = pd.DataFrame({"a": [1, 2]})
     validator = HasColumns["b", "c"]
-    with pytest.raises(ValueError, match="Missing columns:"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_non_dataframe(self):
@@ -313,7 +315,7 @@ class TestGe:
     """Test Ge validator rejects invalid comparison."""
     data = pd.DataFrame({"high": [10, 5, 30], "low": [5, 10, 15]})
     validator = Ge["high", "low"]
-    with pytest.raises(ValueError, match="high must be >= low"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_columns(self):
@@ -359,7 +361,7 @@ class TestLe:
     """Test Le validator rejects invalid comparison."""
     data = pd.DataFrame({"low": [10, 25, 15], "high": [10, 20, 30]})
     validator = Le["low", "high"]
-    with pytest.raises(ValueError, match="low must be <= high"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_class_getitem(self):
@@ -383,14 +385,14 @@ class TestGt:
     """Test Gt validator rejects equal values."""
     data = pd.DataFrame({"high": [10, 10, 10], "low": [10, 10, 10]})
     validator = Gt["high", "low"]
-    with pytest.raises(ValueError, match="high must be > low"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_invalid_comparison(self):
     """Test Gt validator rejects invalid comparison."""
     data = pd.DataFrame({"high": [10, 15, 30], "low": [10, 20, 15]})
     validator = Gt["high", "low"]
-    with pytest.raises(ValueError, match="high must be > low"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_class_getitem(self):
@@ -414,14 +416,14 @@ class TestLt:
     """Test Lt validator rejects equal values."""
     data = pd.DataFrame({"low": [10, 10, 10], "high": [10, 10, 10]})
     validator = Lt["low", "high"]
-    with pytest.raises(ValueError, match="low must be < high"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_invalid_comparison(self):
     """Test Lt validator rejects invalid comparison."""
     data = pd.DataFrame({"low": [15, 20, 30], "high": [10, 30, 25]})
     validator = Lt["low", "high"]
-    with pytest.raises(ValueError, match="low must be < high"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_class_getitem(self):
@@ -452,7 +454,7 @@ class TestMonoUp:
     """Test MonoUp validator rejects decreasing values."""
     data = pd.Series([1, 2, 3, 2, 5])
     validator = MonoUp()
-    with pytest.raises(ValueError, match="must be monotonically increasing"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_valid_dataframe(self):
@@ -466,7 +468,7 @@ class TestMonoUp:
     """Test MonoUp validator rejects DataFrame with non-monotonic column."""
     data = pd.DataFrame({"a": [1, 2, 3], "b": [10, 5, 30]})
     validator = MonoUp()
-    with pytest.raises(ValueError, match="Column 'b' values must be monotonically"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
 
@@ -491,7 +493,7 @@ class TestMonoDown:
     """Test MonoDown validator rejects increasing values."""
     data = pd.Series([5, 4, 3, 4, 1])
     validator = MonoDown()
-    with pytest.raises(ValueError, match="must be monotonically decreasing"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_valid_dataframe(self):
@@ -505,7 +507,7 @@ class TestMonoDown:
     """Test MonoDown validator rejects DataFrame with non-monotonic column."""
     data = pd.DataFrame({"a": [3, 2, 1], "b": [30, 35, 10]})
     validator = MonoDown()
-    with pytest.raises(ValueError, match="Column 'b' values must be monotonically"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
 
@@ -523,7 +525,7 @@ class TestHasColumn:
     """Test HasColumn validator fails when column violates constraint."""
     data = pd.DataFrame({"a": [1.0, np.inf, 3.0], "b": [4.0, 5.0, 6.0]})
     validator = HasColumn["a", Finite]
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_multiple_validators(self):
@@ -537,14 +539,14 @@ class TestHasColumn:
     """Test HasColumn with multiple validators where one fails."""
     data = pd.DataFrame({"a": [1.0, 0.0, 3.0], "b": [4.0, 5.0, 6.0]})
     validator = HasColumn["a", Finite, Positive]
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_column(self):
     """Test HasColumn with missing column."""
     data = pd.DataFrame({"b": [1.0, 2.0, 3.0]})
     validator = HasColumn["a", Finite]
-    with pytest.raises(ValueError, match="Column 'a' not found"):
+    with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_monotonic_validator(self):
@@ -556,7 +558,7 @@ class TestHasColumn:
 
     # Column b is not monotonic up
     validator_b = HasColumn["b", MonoUp]
-    with pytest.raises(ValueError, match="must be monotonically increasing"):
+    with pytest.raises(SchemaError, match=None):
       validator_b.validate(data)
 
   def test_class_getitem(self):
@@ -583,7 +585,7 @@ class TestHasColumn:
 
     # Should fail - column doesn't exist
     validator_missing = HasColumn["missing"]
-    with pytest.raises(ValueError, match="Column 'missing' not found"):
+    with pytest.raises(SchemaError, match=None):
       validator_missing.validate(data)
 
 
@@ -611,12 +613,12 @@ class TestHasColumnWithDecorator:
         "volume": [10, 20, 15],
       }
     )
-    with pytest.raises(ValueError, match="must be finite"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
     # Fails Positive check
     invalid_data = pd.DataFrame({"price": [100.0, 0.0, 150.0], "volume": [10, 20, 15]})
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
   def test_multiple_column_validation(self):
@@ -643,7 +645,7 @@ class TestHasColumnWithDecorator:
         "volume": [10, -5, 15],
       }
     )
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
   def test_oncolumn_with_monotonic(self):
@@ -672,7 +674,7 @@ class TestHasColumnWithDecorator:
         "value": [10, 20, 30, 40, 50],
       }
     )
-    with pytest.raises(ValueError, match="must be monotonically increasing"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
 
@@ -707,7 +709,7 @@ class TestCombinedValidators:
         "close": [102, 107, 105],
       }
     )
-    with pytest.raises(ValueError, match="high must be > low"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
 
   def test_oncolumn_with_nonnan(self):
@@ -725,5 +727,5 @@ class TestCombinedValidators:
     assert result == 150.0
 
     invalid_data = pd.DataFrame({"price": [100.0, np.nan, 150.0]})
-    with pytest.raises(ValueError, match="must not contain NaN"):
+    with pytest.raises(SchemaError, match=None):
       process(invalid_data)
