@@ -6,12 +6,20 @@ and Series using Python's Annotated types, wrapping pandera for validation logic
 
 from __future__ import annotations
 
-# pyright: reportOperatorIssue=false, reportUnknownMemberType=false, reportUnknownVariableType=false
+# pyright: reportOperatorIssue=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportInvalidTypeForm=false
 import functools
 import inspect
 import typing
+from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Annotated, Any, ParamSpec, TypeVar, get_args, get_origin
+from typing import (
+  Annotated,
+  Any,
+  ParamSpec,
+  get_args,
+  get_origin,
+  overload,
+)
 
 import numpy as np
 import pandas as pd
@@ -21,17 +29,18 @@ from pandera.errors import SchemaError
 # Validated alias for Annotated
 Validated = Annotated
 
+
 # Validator Classes
 
 
-class Validator:
+class Validator[T](ABC):
   """Base class for validators."""
 
   def get_checks(self) -> list[pa.Check]:
     """Return a list of pandera Checks."""
     return []
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: T) -> T:
     """Validate data directly using pandera checks."""
     checks = self.get_checks()
     if not checks:
@@ -51,7 +60,7 @@ class Validator:
     return data
 
 
-class Finite(Validator):
+class Finite(Validator[pd.Series | pd.DataFrame]):
   """Validator for finite values (no Inf, no NaN)."""
 
   def get_checks(self) -> list[pa.Check]:
@@ -59,36 +68,110 @@ class Finite(Validator):
     return [pa.Check(lambda s: np.isfinite(s.values).all(), error="must be finite")]
 
 
-class NonNaN(Validator):
+class NonNaN(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-NaN values."""
 
   def get_checks(self) -> list[pa.Check]:
     return [pa.Check(lambda s: pd.notna(s).all(), error="must not contain NaN")]
 
 
-class NonNegative(Validator):
+class NonNegative(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-negative values (>= 0)."""
 
   def get_checks(self) -> list[pa.Check]:
     return [pa.Check.ge(0)]
 
 
-class Positive(Validator):
+class Positive(Validator[pd.Series | pd.DataFrame]):
   """Validator for positive values (> 0)."""
 
   def get_checks(self) -> list[pa.Check]:
     return [pa.Check.gt(0)]
 
 
-class Datetime(Validator):
+class Datetime(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for datetime index or values."""
 
-  # Datetime validation is usually handled by schema dtype, but we can add a check
-  def get_checks(self) -> list[pa.Check]:
-    return []  # Handled by coerce/dtype in schema construction if possible
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    if isinstance(data, pd.Index) and not isinstance(data, pd.DatetimeIndex):
+      raise ValueError("Index must be DatetimeIndex")
+    if isinstance(data, (pd.Series, pd.DataFrame)) and not isinstance(
+      data.index, pd.DatetimeIndex
+    ):
+      raise ValueError("Index must be DatetimeIndex")
+    return data
 
 
-class HasColumns(Validator):
+class UniqueIndex(Validator[pd.Series | pd.DataFrame | pd.Index]):
+  """Validator for unique index."""
+
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    if isinstance(data, pd.Index) and not data.is_unique:
+      raise ValueError("Index must be unique")
+    if isinstance(data, (pd.Series, pd.DataFrame)) and not data.index.is_unique:
+      raise ValueError("Index must be unique")
+    return data
+
+
+class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
+  """Validator for no time gaps in DatetimeIndex."""
+
+  def __init__(self, freq: str) -> None:
+    self.freq = freq
+
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    index = None
+    if isinstance(data, pd.Index):
+      index = data
+    elif isinstance(data, (pd.Series, pd.DataFrame)):
+      index = data.index
+
+    if index is not None:
+      if not isinstance(index, pd.DatetimeIndex):
+        raise ValueError("NoTimeGaps requires a DatetimeIndex")
+
+      if index.empty:
+        return data
+
+      expected_range = pd.date_range(start=index.min(), end=index.max(), freq=self.freq)
+      if len(index) != len(expected_range):
+        raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
+
+      # Check if all expected timestamps are present
+      # Using difference is faster than checking equality of sets or lists
+      if not expected_range.difference(index).empty:
+        raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
+
+    return data
+
+
+class IsDtype(Validator[pd.Series | pd.DataFrame]):
+  """Validator for specific dtype."""
+
+  def __init__(self, dtype: str | type | np.dtype) -> None:
+    self.dtype = np.dtype(dtype)
+
+  def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    if isinstance(data, pd.Series):
+      if data.dtype != self.dtype:
+        raise ValueError(f"Data must be of type {self.dtype}, got {data.dtype}")
+    elif isinstance(data, pd.DataFrame):
+      # Check all columns? Or just that the dataframe contains homogenous data?
+      # Usually IsDtype on a DataFrame implies all columns match.
+      for col in data.columns:
+        if data[col].dtype != self.dtype:
+          msg = f"Column '{col}' must be of type {self.dtype}, got {data[col].dtype}"
+          raise ValueError(msg)
+    return data
+
+
+class HasColumns(Validator[pd.DataFrame]):
   """Validator for presence of specific columns in DataFrame."""
 
   def __init__(self, columns: list[str]) -> None:
@@ -99,7 +182,7 @@ class HasColumns(Validator):
       items = (items,)
     return cls(list(items))
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("HasColumns validator requires a pandas DataFrame")
 
@@ -110,7 +193,7 @@ class HasColumns(Validator):
     return data
 
 
-class Ge(Validator):
+class Ge(Validator[pd.DataFrame]):
   """Validator that Col1 >= Col2."""
 
   def __init__(self, col1: str, col2: str) -> None:
@@ -135,13 +218,13 @@ class Ge(Validator):
       )
     ]
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("Ge validator requires a pandas DataFrame")
     return super().validate(data)
 
 
-class Le(Validator):
+class Le(Validator[pd.DataFrame]):
   """Validator that Col1 <= Col2."""
 
   def __init__(self, col1: str, col2: str) -> None:
@@ -166,13 +249,13 @@ class Le(Validator):
       )
     ]
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("Le validator requires a pandas DataFrame")
     return super().validate(data)
 
 
-class Gt(Validator):
+class Gt(Validator[pd.DataFrame]):
   """Validator that Col1 > Col2."""
 
   def __init__(self, col1: str, col2: str) -> None:
@@ -197,13 +280,13 @@ class Gt(Validator):
       )
     ]
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("Gt validator requires a pandas DataFrame")
     return super().validate(data)
 
 
-class Lt(Validator):
+class Lt(Validator[pd.DataFrame]):
   """Validator that Col1 < Col2."""
 
   def __init__(self, col1: str, col2: str) -> None:
@@ -228,13 +311,13 @@ class Lt(Validator):
       )
     ]
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("Lt validator requires a pandas DataFrame")
     return super().validate(data)
 
 
-class MonoUp(Validator):
+class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for monotonically increasing values or index."""
 
   def get_checks(self) -> list[pa.Check]:
@@ -247,8 +330,24 @@ class MonoUp(Validator):
       )
     ]
 
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    # MonoUp can be checked via pandera for Series/DataFrame, but Index?
+    # Pandera supports Index checks.
+    # But our base validate() only handles DataFrame/Series schemas.
+    # So we should probably keep manual validation for Index, or enhance base validate.
+    # For now, let's keep manual validation for robustness, or use super().validate() if data is not Index.
+    if isinstance(data, pd.Index):
+      if not data.is_monotonic_increasing:
+        raise ValueError("Index must be monotonically increasing")
+      return data
+    
+    # For Series/DataFrame, use pandera checks
+    return super().validate(data)
 
-class MonoDown(Validator):
+
+class MonoDown(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for monotonically decreasing values or index."""
 
   def get_checks(self) -> list[pa.Check]:
@@ -261,22 +360,38 @@ class MonoDown(Validator):
       )
     ]
 
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    if isinstance(data, pd.Index):
+      if not data.is_monotonic_decreasing:
+        raise ValueError("Index must be monotonically decreasing")
+      return data
+    return super().validate(data)
 
-class Index(Validator):
-  """Validator for index properties."""
 
-  def __init__(self, *validators: Validator | type[Validator]) -> None:
+class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
+  """Validator for index properties.
+
+  Can be used to apply validators to the index:
+  - Index[Datetime] - Check index is DatetimeIndex
+  - Index[MonoUp] - Check index is monotonically increasing
+  - Index[Datetime, MonoUp] - Check both
+  """
+
+  def __init__(self, *validators: Validator[Any] | type[Validator[Any]]) -> None:
     self.validators = validators
 
   def __class_getitem__(
-    cls, items: type[Validator] | tuple[type[Validator], ...]
+    cls, items: type[Validator[Any]] | tuple[type[Validator[Any]], ...]
   ) -> Index:
     if not isinstance(items, tuple):
       items = (items,)
     return cls(*items)
 
-  # Index validation is handled in _build_dataframe_schema / _build_series_schema
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
     if isinstance(data, (pd.Series, pd.DataFrame)):
       # Validate index
       # We can use _build_series_schema logic but applied to index
@@ -296,10 +411,12 @@ class Index(Validator):
     return data
 
 
-class HasColumn(Validator):
+class HasColumn(Validator[pd.DataFrame]):
   """Wrapper to apply validators to specific DataFrame columns."""
 
-  def __init__(self, column: str, *validators: Validator | type[Validator]) -> None:
+  def __init__(
+    self, column: str, *validators: Validator[Any] | type[Validator[Any]]
+  ) -> None:
     self.column = column
     self.validators = validators
 
@@ -310,7 +427,7 @@ class HasColumn(Validator):
     validators = items[1:] if len(items) > 1 else ()
     return cls(column, *validators)  # type: ignore[arg-type]
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
+  def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if isinstance(data, pd.DataFrame):
       if self.column not in data.columns:
         raise SchemaError(
@@ -328,153 +445,22 @@ class HasColumn(Validator):
     return data
 
 
-P = ParamSpec("P")
-R = TypeVar("R")
+@overload
+def validated[P: ParamSpec, R](
+  func: Callable[P, R],
+) -> Callable[P, R]: ...
+
+@overload
+def validated[P: ParamSpec, R](
+  *, skip_validation_by_default: bool = False
+) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
-def _instantiate_validator(item: Any) -> Validator | None:  # noqa: ANN401
-  """Helper to instantiate a validator from a type or instance."""
-  if isinstance(item, type) and issubclass(item, Validator):
-    return item()
-  if isinstance(item, Validator):
-    return item
-  return None
-
-
-def _build_dataframe_schema(validators: list[Validator]) -> pa.DataFrameSchema:
-  """Build DataFrame schema from validators."""
-  checks = []
-  columns: dict[str, pa.Column] = {}
-  index_checks = []
-  index_dtype = None
-
-  # 1. Collect global checks and column-specific checks
-  for v in validators:
-    if isinstance(v, HasColumns):
-      for col in v.columns:
-        if col not in columns:
-          columns[col] = pa.Column(required=True)
-    elif isinstance(v, HasColumn):
-      # Column specific validation
-      col_checks = []
-      for sub_v_item in v.validators:
-        sub_v = _instantiate_validator(sub_v_item)
-        if sub_v:
-          col_checks.extend(sub_v.get_checks())
-
-      # Merge into existing column definition or create new
-      if v.column in columns:
-        # If column exists, we should ideally merge checks.
-        # But pa.Column is immutable-ish.
-        # For simplicity in this implementation, we might overwrite or ignore
-        # duplicates.
-        # A robust implementation would collect all checks per column first.
-        pass
-
-  # Re-scanning to build schema properly
-
-  # Global DataFrame checks (e.g. Ge, Le)
-  for v in validators:
-    if isinstance(v, (Ge, Le, Gt, Lt, Finite, NonNaN, NonNegative, Positive)):
-      checks.extend(v.get_checks())
-    elif isinstance(v, MonoUp):
-      checks.append(
-        pa.Check(
-          lambda df: df.apply(lambda col: col.is_monotonic_increasing).all(),
-          error="Values must be monotonically increasing",
-        )
-      )
-    elif isinstance(v, MonoDown):
-      checks.append(
-        pa.Check(
-          lambda df: df.apply(lambda col: col.is_monotonic_decreasing).all(),
-          error="Values must be monotonically decreasing",
-        )
-      )
-
-  # Column definitions
-  column_checks_map: dict[str, list[pa.Check]] = {}
-  required_columns = set()
-
-  for v in validators:
-    if isinstance(v, HasColumns):
-      required_columns.update(v.columns)
-    elif isinstance(v, HasColumn):
-      required_columns.add(v.column)
-      if v.column not in column_checks_map:
-        column_checks_map[v.column] = []
-
-      for sub_v_item in v.validators:
-        sub_v = _instantiate_validator(sub_v_item)
-        if sub_v:
-          column_checks_map[v.column].extend(sub_v.get_checks())
-
-  # Construct pa.Column objects
-  for col_name in required_columns:
-    columns[col_name] = pa.Column(
-      checks=column_checks_map.get(col_name, []), required=True
-    )
-
-  # Index validation
-  for v in validators:
-    if isinstance(v, Index):
-      for sub_v_item in v.validators:
-        sub_v = _instantiate_validator(sub_v_item)
-        if sub_v:
-          if isinstance(sub_v, Datetime):
-            index_dtype = "datetime64[ns]"  # or generic datetime
-          else:
-            index_checks.extend(sub_v.get_checks())
-
-  # Create Schema
-  return pa.DataFrameSchema(
-    columns=columns,
-    checks=checks,
-    index=(
-      pa.Index(dtype=index_dtype, checks=index_checks)
-      if (index_checks or index_dtype)
-      else None
-    ),
-    coerce=False,
-  )
-
-
-def _build_series_schema(validators: list[Validator]) -> pa.SeriesSchema:
-  """Build Series schema from validators."""
-  checks = []
-  dtype = None
-
-  for v in validators:
-    if not isinstance(v, (Index, Datetime)):
-      checks.extend(v.get_checks())
-
-  index_checks = []
-  index_dtype = None
-
-  for v in validators:
-    if isinstance(v, Datetime):
-      index_dtype = "datetime64[ns]"
-    elif isinstance(v, Index):
-      for sub_v_item in v.validators:
-        sub_v = _instantiate_validator(sub_v_item)
-        if sub_v:
-          if isinstance(sub_v, Datetime):
-            index_dtype = "datetime64[ns]"
-          else:
-            index_checks.extend(sub_v.get_checks())
-
-  return pa.SeriesSchema(
-    dtype=dtype,
-    checks=checks,
-    index=(
-      pa.Index(dtype=index_dtype, checks=index_checks)
-      if (index_checks or index_dtype)
-      else None
-    ),
-  )
-
-
-def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
+def validated[P: ParamSpec, R](
+  func: Callable[P, R] | None = None,  # pyright: ignore[reportInvalidTypeForm]
+  *,
+  skip_validation_by_default: bool = False,
+) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:  # pyright: ignore[reportInvalidTypeForm]
   """Decorator to validate function arguments based on Annotated types.
 
   The decorator automatically adds a `skip_validation` parameter to the function.
@@ -483,84 +469,87 @@ def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
 
   Args:
     func: The function to decorate.
+    skip_validation_by_default: If True, `skip_validation` defaults to True.
 
   Returns:
     The decorated function with automatic validation support.
+
+  Example:
+    >>> from pdval import validated, Validated, Finite
+    >>> import pandas as pd
+    >>>
+    >>> @validated
+    ... def process(data: Validated[pd.Series, Finite]):
+    ...     return data.sum()
+    >>>
+    >>> # Validation enabled by default
+    >>> result = process(valid_data)
+    >>>
+    >>> # Skip validation for performance
+    >>> result = process(valid_data, skip_validation=True)
   """
-  # 1. Compute metadata ONCE at decoration time
-  sig = inspect.signature(func)
 
-  # Resolve type hints to handle string annotations
-  try:
+  def decorator(func: Callable[P, R]) -> Callable[P, R]:
+    # Inspect function signature
+    sig = inspect.signature(func)
     type_hints = typing.get_type_hints(func, include_extras=True)
-  except Exception:
-    type_hints = {}
 
-  # Pre-compute a mapping of arg_name -> pa.Schema
-  arg_schemas: dict[str, pa.DataFrameSchema | pa.SeriesSchema] = {}
+    # Pre-compute validators for each argument
+    arg_validators: dict[str, list[Validator[Any]]] = {}
+    for name, param in sig.parameters.items():
+      if name in type_hints:
+        hint = type_hints[name]
+        
+        # Handle Optional/Union types
+        origin = get_origin(hint)
+        if origin is typing.Union or str(origin) == "typing.Union" or str(origin) == "<class 'types.UnionType'>":
+             # Check args for Annotated
+             for arg in get_args(hint):
+                 if get_origin(arg) is Annotated:
+                     hint = arg
+                     break
+        
+        if get_origin(hint) is Annotated:
+          args = get_args(hint)
+          # First arg is the type, rest are metadata (validators)
+          validators = []
+          for item in args[1:]:
+            v = _instantiate_validator(item)
+            if v:
+              validators.append(v)
+          if validators:
+            arg_validators[name] = validators
 
-  for name, param in sig.parameters.items():
-    if name == "self":
-      continue
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:  # pyright: ignore[reportInvalidTypeForm]
+      # Check for skip_validation in kwargs
+      skip = kwargs.pop("skip_validation", skip_validation_by_default)
+      if skip:
+        return func(*args, **kwargs)
 
-    annotation = type_hints.get(name, param.annotation)
-    origin = get_origin(annotation)
+      # Bind arguments
+      bound_args = sig.bind(*args, **kwargs)
+      bound_args.apply_defaults()
 
-    # Handle Optional[Annotated[...]] / Union[Annotated[...], None]
-    if origin is typing.Union:
-      args = get_args(annotation)
-      for arg in args:
-        if get_origin(arg) is Annotated:
-          annotation = arg
-          origin = Annotated
-          break
+      # Validate arguments
+      for name, value in bound_args.arguments.items():
+        if name in arg_validators:
+          for v in arg_validators[name]:
+            v.validate(value)
 
-    if origin is Annotated:
-      metadata = get_args(annotation)
-      validators = []
-      # Iterate over metadata (skipping the first one which is the type)
-      for item in metadata[1:]:
-        v = _instantiate_validator(item)
-        if v:
-          validators.append(v)
-
-      if validators:
-        # Determine if we should build DataFrame or Series schema
-        # We can look at the type hint (metadata[0])
-        arg_type = metadata[0]
-        if isinstance(arg_type, type) and issubclass(arg_type, pd.DataFrame):
-          arg_schemas[name] = _build_dataframe_schema(validators)
-        elif isinstance(arg_type, type) and issubclass(arg_type, pd.Series):
-          arg_schemas[name] = _build_series_schema(validators)
-        else:
-          # Fallback: try to build both or decide at runtime?
-          # If we don't know the type, we can't pre-build the exact schema type easily
-          # unless we assume one.
-          # But wait, Annotated[pd.DataFrame, ...] gives us the type!
-          # If the user used Annotated[Any, ...], we might have trouble.
-          # Let's assume standard usage.
-          pass
-
-  @functools.wraps(func)
-  def wrapper(*args: P.args, skip_validation: bool = False, **kwargs: P.kwargs) -> R:
-    if skip_validation:
       return func(*args, **kwargs)
 
-    # 2. Bind args
-    bound = sig.bind(*args, **kwargs)
-    bound.apply_defaults()
+    return wrapper
 
-    # 3. Validate using pre-computed schemas
-    for name, value in bound.arguments.items():
-      if value is None:
-        continue
+  if func is None:
+    return decorator  # type: ignore
+  return decorator(func)
 
-      if name in arg_schemas:
-        try:
-          arg_schemas[name].validate(value)
-        except Exception as e:
-          raise e
 
-    return func(*bound.args, **bound.kwargs)
-
-  return wrapper  # type: ignore[return-value]
+def _instantiate_validator(item: Any) -> Validator[Any] | None:  # noqa: ANN401
+  """Helper to instantiate a validator from a type or instance."""
+  if isinstance(item, type) and issubclass(item, Validator):
+    return item()
+  if isinstance(item, Validator):
+    return item
+  return None

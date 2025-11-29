@@ -1,6 +1,6 @@
 """Tests for the @validated decorator."""
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportArgumentType=false
 
 import numpy as np
 import pandas as pd
@@ -116,7 +116,7 @@ class TestValidatedDecorator:
 
     processor = Processor()
     valid_data = pd.Series([1.0, 2.0, 3.0])
-    result = processor.process(valid_data)
+    result = processor.process(valid_data)  # pyright: ignore[reportAttributeAccessIssue]
     assert result == 6.0
 
   def test_optional_validated_argument(self):
@@ -137,7 +137,7 @@ class TestValidatedDecorator:
     assert result == 6.0
 
     # Invalid data still raises
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(SchemaError):
       process(pd.Series([1.0, np.inf, 3.0]))
 
   def test_multiple_arguments(self):
@@ -360,3 +360,50 @@ class TestEdgeCases:
     # Override default
     result = process(pd.Series([5.0, 6.0]))
     assert result == 11.0
+
+
+def test_validated_decorator_defaults():
+  @validated
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Default: Validation ON
+  with pytest.raises(SchemaError):
+    process(pd.Series([float("inf")]))
+
+  # Explicit Skip: Validation OFF
+  process(pd.Series([float("inf")]), skip_validation=True)  # pyright: ignore[reportCallIssue]
+
+
+def test_validated_decorator_skip_default():
+  @validated(skip_validation_by_default=True)
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Default: Validation OFF
+  process(pd.Series([float("inf")]))
+
+  # Explicit Enable: Validation ON
+  with pytest.raises(SchemaError):
+    process(pd.Series([float("inf")]), skip_validation=False)  # pyright: ignore[reportCallIssue]
+
+
+def test_validated_decorator_no_args_call():
+  # This is technically valid python: @validated()
+  @validated()
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Default: Validation ON
+  with pytest.raises(SchemaError):
+    process(pd.Series([float("inf")]))
+
+
+def test_validated_decorator_explicit_false_default():
+  @validated(skip_validation_by_default=False)
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Default: Validation ON
+  with pytest.raises(SchemaError):
+    process(pd.Series([float("inf")]))

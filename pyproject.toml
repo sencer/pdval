@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pdval-pandera"
-version = "0.1.1"
+name = "pdval"
+version = "0.1.2"
 description = "Pandas validation using Annotated types and decorators"
 authors = [{ name = "Sencer S.", email = "nospam@gmail.com" }]
 license = { text = "MIT" }
@@ -124,6 +124,3 @@ exclude_lines = [
     "raise NotImplementedError",
 ]
 
-# Allow skip_validation parameter between *args and **kwargs
-# This works at runtime but basedpyright is overly strict about ParamSpec
-reportGeneralTypeIssues = "none"
