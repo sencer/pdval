@@ -122,9 +122,7 @@ class TestValidatedDecorator:
     """Test Optional[Validated[...]] annotation."""
 
     @validated
-    def process(
-      data: Validated[pd.Series, Finite] | None = None
-    ):
+    def process(data: Validated[pd.Series, Finite] | None = None):
       if data is None:
         return 0
       return data.sum()
@@ -253,9 +251,7 @@ class TestComplexValidations:
     """Test validation for percentage returns calculation."""
 
     @validated
-    def calculate_returns(
-      prices: Validated[pd.Series, Finite, Positive]
-    ):
+    def calculate_returns(prices: Validated[pd.Series, Finite, Positive]):
       return prices.pct_change()
 
     # Valid prices
