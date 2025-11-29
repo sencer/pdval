@@ -10,7 +10,6 @@ from __future__ import annotations
 import functools
 import inspect
 import typing
-from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import (
   Annotated,
@@ -33,7 +32,7 @@ Validated = Annotated
 # Validator Classes
 
 
-class Validator[T](ABC):
+class Validator[T]:
   """Base class for validators."""
 
   def get_checks(self) -> list[pa.Check]:
@@ -337,12 +336,13 @@ class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
     # Pandera supports Index checks.
     # But our base validate() only handles DataFrame/Series schemas.
     # So we should probably keep manual validation for Index, or enhance base validate.
-    # For now, let's keep manual validation for robustness, or use super().validate() if data is not Index.
+    # For now, let's keep manual validation for robustness, or use super().validate()
+    # if data is not Index.
     if isinstance(data, pd.Index):
       if not data.is_monotonic_increasing:
         raise ValueError("Index must be monotonically increasing")
       return data
-    
+
     # For Series/DataFrame, use pandera checks
     return super().validate(data)
 
@@ -450,6 +450,7 @@ def validated[P: ParamSpec, R](
   func: Callable[P, R],
 ) -> Callable[P, R]: ...
 
+
 @overload
 def validated[P: ParamSpec, R](
   *, skip_validation_by_default: bool = False
@@ -496,19 +497,23 @@ def validated[P: ParamSpec, R](
 
     # Pre-compute validators for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}
-    for name, param in sig.parameters.items():
+    for name, _ in sig.parameters.items():
       if name in type_hints:
         hint = type_hints[name]
-        
+
         # Handle Optional/Union types
         origin = get_origin(hint)
-        if origin is typing.Union or str(origin) == "typing.Union" or str(origin) == "<class 'types.UnionType'>":
-             # Check args for Annotated
-             for arg in get_args(hint):
-                 if get_origin(arg) is Annotated:
-                     hint = arg
-                     break
-        
+        if (
+          origin is typing.Union
+          or str(origin) == "typing.Union"
+          or str(origin) == "<class 'types.UnionType'>"
+        ):
+          # Check args for Annotated
+          for arg in get_args(hint):
+            if get_origin(arg) is Annotated:
+              hint = arg
+              break
+
         if get_origin(hint) is Annotated:
           args = get_args(hint)
           # First arg is the type, rest are metadata (validators)
