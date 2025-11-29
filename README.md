@@ -309,6 +309,8 @@ While [Pandera](https://pandera.readthedocs.io/) is excellent for comprehensive 
 - **Type annotation syntax** - Uses Python's native `Annotated` types
 - **Minimal overhead** - Lightweight with no heavy dependencies
 
+> **Note**: If you prefer using Pandera as the underlying validation engine (for more detailed error reporting and robustness), check out the [`pandera`](https://github.com/sselcuk/pdval/tree/pandera) branch of this repository.
+
 Use `pdval` when you want simple, inline validation. Use Pandera when you need comprehensive schema management, complex validation logic, or data contracts.
 
 ## Performance
