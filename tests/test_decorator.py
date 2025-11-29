@@ -1,4 +1,6 @@
 """Tests for the @validated decorator."""
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
+# pyright: reportCallIssue=false
 
 import numpy as np
 import pandas as pd

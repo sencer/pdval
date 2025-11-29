@@ -1,4 +1,6 @@
 """Tests for individual validator classes."""
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
+# pyright: reportCallIssue=false, reportAttributeAccessIssue=false
 
 import numpy as np
 import pandas as pd
@@ -279,8 +281,8 @@ class TestHasColumns:
     """Test HasColumns validator with non-DataFrame."""
     data = pd.Series([1, 2, 3])
     validator = HasColumns["a"]
-    result = validator.validate(data)
-    assert result.equals(data)
+    with pytest.raises(TypeError, match="requires a pandas DataFrame"):
+      validator.validate(data)
 
   def test_class_getitem_single(self):
     """Test HasColumns __class_getitem__ with single column."""
@@ -335,8 +337,8 @@ class TestGe:
     """Test Ge validator with non-DataFrame."""
     data = pd.Series([1, 2, 3])
     validator = Ge["a", "b"]
-    result = validator.validate(data)
-    assert result.equals(data)
+    with pytest.raises(TypeError, match="requires a pandas DataFrame"):
+      validator.validate(data)
 
 
 class TestLe:
