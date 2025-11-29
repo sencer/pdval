@@ -870,7 +870,7 @@ class TestNonEmpty:
     """Test NonEmpty validator rejects empty Series."""
     data = pd.Series([], dtype=float)
     validator = NonEmpty()
-    with pytest.raises(ValueError, match="Data must not be empty"):
+    with pytest.raises(SchemaError, match="Data must not be empty"):
       validator.validate(data)
 
   def test_valid_dataframe(self):
@@ -884,7 +884,7 @@ class TestNonEmpty:
     """Test NonEmpty validator rejects empty DataFrame."""
     data = pd.DataFrame({"a": [], "b": []})
     validator = NonEmpty()
-    with pytest.raises(ValueError, match="Data must not be empty"):
+    with pytest.raises(SchemaError, match="Data must not be empty"):
       validator.validate(data)
 
   def test_valid_index(self):

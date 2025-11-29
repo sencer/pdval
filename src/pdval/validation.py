@@ -70,12 +70,17 @@ class Finite(Validator[pd.Series | pd.DataFrame]):
 class NonEmpty(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for non-empty data."""
 
+  def get_checks(self) -> list[pa.Check]:
+    return [pa.Check(lambda data: not data.empty, error="Data must not be empty")]
+
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
-    if isinstance(data, (pd.Series, pd.DataFrame, pd.Index)) and data.empty:
-      raise ValueError("Data must not be empty")
-    return data
+    if isinstance(data, pd.Index):
+      if data.empty:
+        raise ValueError("Data must not be empty")
+      return data
+    return super().validate(data)
 
 
 class NonNaN(Validator[pd.Series | pd.DataFrame]):
