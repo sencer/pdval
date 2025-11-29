@@ -3,16 +3,16 @@
 __version__ = "0.1.0"
 
 from pdval.validation import (
-  DateTimeIndexed,
+  Datetime,  # Changed from DateTimeIndexed
   Finite,
   Ge,
   Gt,
   HasColumn,
   HasColumns,
+  Index,  # Added
   Le,
   Lt,
   MonoDown,
-  MonotonicIndex,
   MonoUp,
   NonNaN,
   NonNegative,
@@ -23,17 +23,17 @@ from pdval.validation import (
 )
 
 __all__ = [
-  "DateTimeIndexed",
+  "Datetime",
   "Finite",
   "Ge",
   "Gt",
   "HasColumn",
   "HasColumns",
+  "Index",
   "Le",
   "Lt",
   "MonoDown",
   "MonoUp",
-  "MonotonicIndex",
   "NonNaN",
   "NonNegative",
   "Positive",
