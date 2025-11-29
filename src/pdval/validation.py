@@ -67,6 +67,17 @@ class Finite(Validator[pd.Series | pd.DataFrame]):
     return [pa.Check(lambda s: np.isfinite(s.values).all(), error="must be finite")]
 
 
+class NonEmpty(Validator[pd.Series | pd.DataFrame | pd.Index]):
+  """Validator for non-empty data."""
+
+  def validate(
+    self, data: pd.Series | pd.DataFrame | pd.Index
+  ) -> pd.Series | pd.DataFrame | pd.Index:
+    if isinstance(data, (pd.Series, pd.DataFrame, pd.Index)) and data.empty:
+      raise ValueError("Data must not be empty")
+    return data
+
+
 class NonNaN(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-NaN values."""
 

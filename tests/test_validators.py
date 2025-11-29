@@ -20,6 +20,7 @@ from pdval import (
   Lt,
   MonoDown,
   MonoUp,
+  NonEmpty,
   NonNaN,
   NonNegative,
   NoTimeGaps,
@@ -853,3 +854,55 @@ def test_validated_decorator_skip_default():
   # Explicit Enable: Validation ON
   with pytest.raises(SchemaError):
     process(pd.Series([float("inf")]), skip_validation=False)  # pyright: ignore[reportCallIssue]
+
+
+class TestNonEmpty:
+  """Tests for NonEmpty validator."""
+
+  def test_valid_series(self):
+    """Test NonEmpty validator with valid Series."""
+    data = pd.Series([1.0, 2.0, 3.0])
+    validator = NonEmpty()
+    result = validator.validate(data)
+    assert result.equals(data)
+
+  def test_empty_series(self):
+    """Test NonEmpty validator rejects empty Series."""
+    data = pd.Series([], dtype=float)
+    validator = NonEmpty()
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      validator.validate(data)
+
+  def test_valid_dataframe(self):
+    """Test NonEmpty validator with valid DataFrame."""
+    data = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+    validator = NonEmpty()
+    result = validator.validate(data)
+    assert result.equals(data)
+
+  def test_empty_dataframe(self):
+    """Test NonEmpty validator rejects empty DataFrame."""
+    data = pd.DataFrame({"a": [], "b": []})
+    validator = NonEmpty()
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      validator.validate(data)
+
+  def test_valid_index(self):
+    """Test NonEmpty validator with valid Index."""
+    data = pd.Index([1, 2, 3])
+    validator = NonEmpty()
+    result = validator.validate(data)
+    assert result.equals(data)
+
+  def test_empty_index(self):
+    """Test NonEmpty validator rejects empty Index."""
+    data = pd.Index([], dtype=int)
+    validator = NonEmpty()
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      validator.validate(data)
+
+  def test_non_pandas_type(self):
+    """Test NonEmpty validator with non-pandas type."""
+    validator = NonEmpty()
+    result = validator.validate(42)
+    assert result == 42
