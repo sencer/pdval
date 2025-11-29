@@ -414,10 +414,9 @@ def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
   """
 
   @functools.wraps(func)
-  def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-    # Check if validation should be skipped (default False = validate)
-    skip_validation = kwargs.pop("skip_validation", False)
-
+  def wrapper(
+    *args: P.args, skip_validation: bool = False, **kwargs: P.kwargs
+  ) -> R:
     if not skip_validation:
       # Need to bind args for validation
       sig = inspect.signature(func)
@@ -430,4 +429,4 @@ def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
     # Fast path: no validation, just call directly
     return func(*args, **kwargs)
 
-  return wrapper
+  return wrapper  # type: ignore[return-value]
