@@ -629,7 +629,6 @@ class TestHasColumnWithDecorator:
         HasColumn["price", Finite, Positive],  # noqa: F821
         HasColumn["volume", Positive],  # noqa: F821
       ],
-      validate: bool = True,
     ):
       return (data["price"] * data["volume"]).sum()
 
