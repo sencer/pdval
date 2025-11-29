@@ -300,16 +300,15 @@ The validation metadata is:
 
 This gives you the best of both worlds: clean type checking and runtime validation.
 
-## Comparison with Pandera
+## Powered by Pandera
 
-While [Pandera](https://pandera.readthedocs.io/) is excellent for comprehensive schema validation, `pdval` offers a lighter-weight alternative focused on:
+This branch of `pdval` uses [Pandera](https://pandera.readthedocs.io/) as the underlying validation engine. This provides:
 
-- **Inline validation** - Constraints live in function signatures
-- **Decorator simplicity** - Single `@validated` decorator
-- **Type annotation syntax** - Uses Python's native `Annotated` types
-- **Minimal overhead** - Lightweight with no heavy dependencies
+- **Robust Validation** - Leverages Pandera's comprehensive schema validation
+- **Detailed Errors** - Granular error reporting for debugging
+- **Schema Integration** - Compatible with Pandera schemas
 
-Use `pdval` when you want simple, inline validation. Use Pandera when you need comprehensive schema management, complex validation logic, or data contracts.
+While slightly heavier than the lightweight version (available on `master`), it offers significantly more safety and features.
 
 ## Performance
 
