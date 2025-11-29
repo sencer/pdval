@@ -117,3 +117,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
+
+# Allow skip_validation parameter between *args and **kwargs
+# This works at runtime but basedpyright is overly strict about ParamSpec
+reportGeneralTypeIssues = "none"
