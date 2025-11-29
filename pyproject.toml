@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pdval"
+name = "pdval-pandera"
 version = "0.1.0"
 description = "Pandas validation using Annotated types and decorators"
 authors = [{ name = "Sencer S.", email = "nospam@gmail.com" }]
@@ -22,14 +22,16 @@ dev = [
     "ruff>=0.1.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "build>=0.10.0", # Added for package building
+    "twine>=4.0.0", # Added for package distribution checking and uploading
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pdval*"]
+include = ["pdval-pandera*"]
 
 [tool.setuptools.package-data]
-pdval = ["py.typed"]
+pdval-pandera = ["py.typed"]
 
 
 # ============================================================
@@ -68,7 +70,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["pdval"]
+known-first-party = ["pdval", "pdval-pandera"]
 
 [tool.ruff.format]
 quote-style = "double"
