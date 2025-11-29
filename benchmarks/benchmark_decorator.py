@@ -1,6 +1,6 @@
 """Detailed benchmark of @validated decorator overhead."""
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportArgumentType=false
 
 import timeit
 from typing import Any

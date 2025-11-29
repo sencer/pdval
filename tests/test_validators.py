@@ -1,6 +1,6 @@
 """Tests for individual validator classes."""
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
-# pyright: reportCallIssue=false, reportAttributeAccessIssue=false
+# pyright: reportCallIssue=false, reportAttributeAccessIssue=false, reportArgumentType=false
 
 import numpy as np
 import pandas as pd
@@ -14,13 +14,16 @@ from pdval import (
   HasColumn,
   HasColumns,
   Index,
+  IsDtype,
   Le,
   Lt,
   MonoDown,
   MonoUp,
   NonNaN,
   NonNegative,
+  NoTimeGaps,
   Positive,
+  UniqueIndex,
   Validated,
   validated,
 )
@@ -729,3 +732,123 @@ class TestCombinedValidators:
     invalid_data = pd.DataFrame({"price": [100.0, np.nan, 150.0]})
     with pytest.raises(ValueError, match="must not contain NaN"):
       process(invalid_data)
+
+
+class TestUniqueIndex:
+  def test_unique_index_series(self):
+    validator = UniqueIndex()
+
+    # Valid
+    data = pd.Series([1, 2], index=[1, 2])
+    assert validator.validate(data) is data
+
+    # Invalid
+    data = pd.Series([1, 2], index=[1, 1])
+    with pytest.raises(ValueError, match="Index must be unique"):
+      validator.validate(data)
+
+  def test_unique_index_dataframe(self):
+    validator = UniqueIndex()
+
+    # Valid
+    data = pd.DataFrame({"a": [1, 2]}, index=pd.Index([1, 2]))
+    assert validator.validate(data) is data
+
+    # Invalid
+    data = pd.DataFrame({"a": [1, 2]}, index=pd.Index([1, 1]))
+    with pytest.raises(ValueError, match="Index must be unique"):
+      validator.validate(data)
+
+
+class TestNoTimeGaps:
+  def test_no_time_gaps(self):
+    validator = NoTimeGaps(freq="1D")
+
+    # Valid
+    dates = pd.date_range("2024-01-01", periods=3, freq="1D")
+    data = pd.Series([1, 2, 3], index=dates)
+    assert validator.validate(data) is data
+
+    # Invalid (missing day)
+    dates = pd.to_datetime(["2024-01-01", "2024-01-03"])
+    data = pd.Series([1, 2], index=dates)
+    with pytest.raises(ValueError, match="Time gaps detected"):
+      validator.validate(data)
+
+  def test_empty_index(self):
+    validator = NoTimeGaps(freq="1D")
+    data = pd.Series([], index=pd.DatetimeIndex([]))
+    assert validator.validate(data) is data
+
+
+class TestIsDtype:
+  def test_is_dtype_series(self):
+    validator = IsDtype(float)
+
+    # Valid
+    data = pd.Series([1.0, 2.0])
+    assert validator.validate(data) is data
+
+    # Invalid
+    data = pd.Series([1, 2])
+    with pytest.raises(ValueError, match="Data must be of type"):
+      validator.validate(data)
+
+  def test_is_dtype_dataframe(self):
+    validator = IsDtype(float)
+
+    # Valid
+    data = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+    assert validator.validate(data) is data
+
+    # Invalid
+    data = pd.DataFrame({"a": [1.0, 2.0], "b": [1, 2]})
+    with pytest.raises(ValueError, match="Column 'b' must be of type"):
+      validator.validate(data)
+
+  def test_numpy_dtype(self):
+    validator = IsDtype(np.float64)
+    data = pd.Series([1.0, 2.0], dtype=np.float64)
+    assert validator.validate(data) is data
+
+
+def test_integration():
+  @validated
+  def process(data: Validated[pd.Series, UniqueIndex, IsDtype(float)]):
+    return data
+
+  # Valid
+  data = pd.Series([1.0, 2.0], index=[1, 2])
+  process(data)
+
+  # Invalid Index
+  data = pd.Series([1.0, 2.0], index=[1, 1])
+  with pytest.raises(ValueError, match="Index must be unique"):
+    process(data)
+
+  # Invalid Dtype
+  data = pd.Series([1, 2], index=[1, 2])
+  with pytest.raises(ValueError, match="Data must be of type"):
+    process(data)
+
+
+def test_validated_decorator_skip_validation():
+  @validated
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Explicit Skip: Validation OFF
+  process(pd.Series([float("inf")]), skip_validation=True)  # pyright: ignore[reportCallIssue]
+
+
+def test_validated_decorator_skip_default():
+  @validated(skip_validation_by_default=True)
+  def process(data: Validated[pd.Series, Finite]):
+    return data
+
+  # Default: Validation OFF
+  process(pd.Series([float("inf")]))
+
+  # Explicit Enable: Validation ON
+  with pytest.raises(ValueError):
+    process(pd.Series([float("inf")]), skip_validation=False)  # pyright: ignore[reportCallIssue]
