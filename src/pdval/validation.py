@@ -70,8 +70,9 @@ class NonNaN(Validator):
 
   def get_checks(self) -> list[pa.Check]:
     # pa.Check.notna() is not a thing, use pa.Check(lambda s: s.notna().all())
-    # Or better, use built-in check if available. 
-    # Actually pa.Check.notna IS available in newer pandera versions but maybe not the one installed?
+    # Or better, use built-in check if available.
+    # Actually pa.Check.notna IS available in newer pandera versions
+    # but maybe not the one installed?
     # Let's use robust lambda checks.
     return [pa.Check(lambda s: s.notna().all(), error="must not contain NaN")]
 
@@ -138,15 +139,17 @@ class Ge(Validator):
 
   def get_checks(self) -> list[pa.Check]:
     return [
-      pa.Check(
-        lambda df: (
-            df[self.col1] >= df[self.col2] 
-            if isinstance(df, pd.DataFrame) and self.col1 in df.columns and self.col2 in df.columns 
-            else True
-        ),
-        name=f"{self.col1} >= {self.col2}",
-        error=f"{self.col1} must be >= {self.col2}",
-      )
+        pa.Check(
+            lambda df: (
+                df[self.col1] >= df[self.col2]
+                if isinstance(df, pd.DataFrame)
+                and self.col1 in df.columns
+                and self.col2 in df.columns
+                else True
+            ),
+            name=f"{self.col1} >= {self.col2}",
+            error=f"{self.col1} must be >= {self.col2}",
+        )
     ]
 
 
@@ -162,15 +165,17 @@ class Le(Validator):
 
   def get_checks(self) -> list[pa.Check]:
     return [
-      pa.Check(
-        lambda df: (
-            df[self.col1] <= df[self.col2] 
-            if isinstance(df, pd.DataFrame) and self.col1 in df.columns and self.col2 in df.columns 
-            else True
-        ),
-        name=f"{self.col1} <= {self.col2}",
-        error=f"{self.col1} must be <= {self.col2}",
-      )
+        pa.Check(
+            lambda df: (
+                df[self.col1] <= df[self.col2]
+                if isinstance(df, pd.DataFrame)
+                and self.col1 in df.columns
+                and self.col2 in df.columns
+                else True
+            ),
+            name=f"{self.col1} <= {self.col2}",
+            error=f"{self.col1} must be <= {self.col2}",
+        )
     ]
 
 
@@ -186,15 +191,17 @@ class Gt(Validator):
 
   def get_checks(self) -> list[pa.Check]:
     return [
-      pa.Check(
-        lambda df: (
-            df[self.col1] > df[self.col2] 
-            if isinstance(df, pd.DataFrame) and self.col1 in df.columns and self.col2 in df.columns 
-            else True
-        ),
-        name=f"{self.col1} > {self.col2}",
-        error=f"{self.col1} must be > {self.col2}",
-      )
+        pa.Check(
+            lambda df: (
+                df[self.col1] > df[self.col2]
+                if isinstance(df, pd.DataFrame)
+                and self.col1 in df.columns
+                and self.col2 in df.columns
+                else True
+            ),
+            name=f"{self.col1} > {self.col2}",
+            error=f"{self.col1} must be > {self.col2}",
+        )
     ]
 
 
@@ -210,15 +217,17 @@ class Lt(Validator):
 
   def get_checks(self) -> list[pa.Check]:
     return [
-      pa.Check(
-        lambda df: (
-            df[self.col1] < df[self.col2] 
-            if isinstance(df, pd.DataFrame) and self.col1 in df.columns and self.col2 in df.columns 
-            else True
-        ),
-        name=f"{self.col1} < {self.col2}",
-        error=f"{self.col1} must be < {self.col2}",
-      )
+        pa.Check(
+            lambda df: (
+                df[self.col1] < df[self.col2]
+                if isinstance(df, pd.DataFrame)
+                and self.col1 in df.columns
+                and self.col2 in df.columns
+                else True
+            ),
+            name=f"{self.col1} < {self.col2}",
+            error=f"{self.col1} must be < {self.col2}",
+        )
     ]
 
 
@@ -228,9 +237,10 @@ class MonoUp(Validator):
   def get_checks(self) -> list[pa.Check]:
     return [
         pa.Check(
-            lambda x: x.is_monotonic_increasing if isinstance(x, (pd.Series, pd.Index)) 
+            lambda x: x.is_monotonic_increasing
+            if isinstance(x, (pd.Series, pd.Index))
             else x.apply(lambda col: col.is_monotonic_increasing).all(),
-            error="must be monotonically increasing"
+            error="must be monotonically increasing",
         )
     ]
 
@@ -241,9 +251,10 @@ class MonoDown(Validator):
   def get_checks(self) -> list[pa.Check]:
     return [
         pa.Check(
-            lambda x: x.is_monotonic_decreasing if isinstance(x, (pd.Series, pd.Index)) 
+            lambda x: x.is_monotonic_decreasing
+            if isinstance(x, (pd.Series, pd.Index))
             else x.apply(lambda col: col.is_monotonic_decreasing).all(),
-            error="must be monotonically decreasing"
+            error="must be monotonically decreasing",
         )
     ]
 
@@ -272,7 +283,9 @@ class Index(Validator):
         if v:
              if isinstance(v, Datetime):
                  if not isinstance(index, pd.DatetimeIndex):
-                     raise SchemaError(schema=None, data=data, message="Index must be DatetimeIndex")
+                     raise SchemaError(
+                         schema=None, data=data, message="Index must be DatetimeIndex"
+                     )
              elif isinstance(v, (MonoUp, MonoDown)):
                  # These have get_checks which return pa.Check.monotonic...
                  # We can run these checks on the index converted to Series
@@ -321,7 +334,7 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def _instantiate_validator(item: Any) -> Validator | None:
+def _instantiate_validator(item: Any) -> Validator | None:  # noqa: ANN401
   """Helper to instantiate a validator from a type or instance."""
   if isinstance(item, type) and issubclass(item, Validator):
     return item()
@@ -354,9 +367,7 @@ def _validate_single_argument(
     return
 
   metadata = get_args(annotation)
-  # First arg is the type (e.g. pd.DataFrame)
-  annotated_type = metadata[0]
-
+  
   # Collect validators
   validators: list[Validator] = []
   for item in metadata[1:]:
@@ -399,7 +410,8 @@ def _validate_dataframe(df: pd.DataFrame, validators: list[Validator]) -> None:
       
       # Merge into existing column definition or create new
       if v.column in columns:
-        # Append checks to existing column (this is a bit tricky with pandera objects being immutable-ish)
+        # Append checks to existing column
+        # (this is a bit tricky with pandera objects being immutable-ish)
         # We'll just re-create it or append to a list we track
         # Simpler: just add to a separate dict of checks and merge later?
         # For now, let's assume we can just overwrite/add.
@@ -423,9 +435,19 @@ def _validate_dataframe(df: pd.DataFrame, validators: list[Validator]) -> None:
        # So we should add a check that iterates columns or check all columns
        # Pandera doesn't have a "all columns monotonic" check easily without iterating
        # We can add a global check:
-       checks.append(pa.Check(lambda df: df.apply(lambda col: col.is_monotonic_increasing).all(), error="Values must be monotonically increasing"))
+       checks.append(
+           pa.Check(
+               lambda df: df.apply(lambda col: col.is_monotonic_increasing).all(),
+               error="Values must be monotonically increasing",
+           )
+       )
     elif isinstance(v, MonoDown):
-       checks.append(pa.Check(lambda df: df.apply(lambda col: col.is_monotonic_decreasing).all(), error="Values must be monotonically decreasing"))
+       checks.append(
+           pa.Check(
+               lambda df: df.apply(lambda col: col.is_monotonic_decreasing).all(),
+               error="Values must be monotonically decreasing",
+           )
+       )
 
   # Column definitions
   # We need to handle HasColumn and HasColumns
@@ -450,7 +472,9 @@ def _validate_dataframe(df: pd.DataFrame, validators: list[Validator]) -> None:
 
   # Construct pa.Column objects
   for col_name in required_columns:
-    columns[col_name] = pa.Column(checks=column_checks_map.get(col_name, []), required=True)
+    columns[col_name] = pa.Column(
+        checks=column_checks_map.get(col_name, []), required=True
+    )
 
   # Index validation
   for v in validators:
@@ -467,8 +491,12 @@ def _validate_dataframe(df: pd.DataFrame, validators: list[Validator]) -> None:
   schema = pa.DataFrameSchema(
     columns=columns,
     checks=checks,
-    index=pa.Index(dtype=index_dtype, checks=index_checks) if (index_checks or index_dtype) else None,
-    coerce=False # Don't coerce by default, just validate
+    index=(
+        pa.Index(dtype=index_dtype, checks=index_checks)
+        if (index_checks or index_dtype)
+        else None
+    ),
+    coerce=False,  # Don't coerce by default, just validate
   )
   
   # Validate
@@ -483,13 +511,15 @@ def _validate_series(series: pd.Series, validators: list[Validator]) -> None:
   for v in validators:
     if isinstance(v, Datetime):
         # For Series, Datetime usually means values are datetime?
-        # Old code: "Index must be DatetimeIndex" check was in Datetime validator but 
-        # it checked data.index if it was Series/DataFrame.
-        # Wait, the old Datetime validator checked the INDEX of the series/df, not the values?
+        # Old code: "Index must be DatetimeIndex" check was in Datetime
+        # validator but it checked data.index if it was Series/DataFrame.
+        # Wait, the old Datetime validator checked the INDEX of the
+        # series/df, not the values?
         # Let's re-read old code.
         # Old Datetime.validate:
         # if isinstance(data, pd.Index) ...
-        # if isinstance(data, (pd.Series, pd.DataFrame)) and not isinstance(data.index, pd.DatetimeIndex)
+        # if isinstance(data, (pd.Series, pd.DataFrame)) and
+        # not isinstance(data.index, pd.DatetimeIndex)
         # So it validated the INDEX.
         pass
     else:
@@ -518,7 +548,11 @@ def _validate_series(series: pd.Series, validators: list[Validator]) -> None:
   schema = pa.SeriesSchema(
       dtype=dtype,
       checks=checks,
-      index=pa.Index(dtype=index_dtype, checks=index_checks) if (index_checks or index_dtype) else None
+      index=(
+          pa.Index(dtype=index_dtype, checks=index_checks)
+          if (index_checks or index_dtype)
+          else None
+      ),
   )
   
   schema.validate(series)
@@ -526,18 +560,16 @@ def _validate_series(series: pd.Series, validators: list[Validator]) -> None:
 
 def _validate_index(index: pd.Index, validators: list[Validator]) -> None:
     """Validate Index using pandera."""
-    # pa.Index schema is for a column-like index in a dataframe schema, 
-    # but we can use it standalone? No, pa.Index is a schema component.
-    # We can wrap it in a DataFrameSchema or use SeriesSchema?
-    # Actually, we can just use SeriesSchema on the index converted to series?
-    # Or just check manually if pandera doesn't support standalone Index validation easily.
+    # pa.Index schema is for a column-like index in a dataframe schema.
+    # We can just use SeriesSchema on the index converted to series?
+    # Or just check manually if pandera doesn't support standalone
+    # Index validation easily.
     
-    # Actually, we can use pa.SeriesSchema(index=...) and validate a dummy series?
-    # Or just use the checks directly?
+    # Actually, we can use pa.SeriesSchema(index=...) and validate
+    # a dummy series? Or just use the checks directly?
     
     # Let's try to use checks directly for simplicity if schema is too heavy
     checks = []
-    dtype = None
     
     for v in validators:
         if isinstance(v, Datetime):
