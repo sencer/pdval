@@ -1,7 +1,7 @@
 # pdval
 
 ![CI](https://github.com/sencer/pdval/actions/workflows/ci.yml/badge.svg)
-[![codecov](https://codecov.io/gh/sencer/pdval/branch/main/graph/badge.svg)](https://app.codecov.io/github/sencer/pdval)
+[![codecov](https://codecov.io/gh/sencer/pdval/branch/pandera/graph/badge.svg)](https://app.codecov.io/github/sencer/pdval)
 
 **Pandas validation using Annotated types and decorators**
 
