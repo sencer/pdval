@@ -414,7 +414,9 @@ def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
   """
 
   @functools.wraps(func)
-  def wrapper(*args: P.args, skip_validation: bool = False, **kwargs: P.kwargs) -> R:
+  def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+    # Check if validation should be skipped (default False = validate)
+    skip_validation = kwargs.pop("skip_validation", False)
 
     if not skip_validation:
       # Need to bind args for validation
