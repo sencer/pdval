@@ -28,10 +28,10 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["pdval-pandera*"]
+include = ["pdval*"]
 
 [tool.setuptools.package-data]
-pdval-pandera = ["py.typed"]
+pdval = ["py.typed"]
 
 
 # ============================================================
