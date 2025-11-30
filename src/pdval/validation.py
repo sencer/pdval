@@ -491,25 +491,29 @@ class HasColumn(Validator[pd.DataFrame]):
     return data
 
 
+P = ParamSpec("P")
+R = typing.TypeVar("R")
+
+
 @overload
-def validated[P: ParamSpec, R](
+def validated(  # noqa: UP047
   func: Callable[P, R],
 ) -> Callable[P, R]: ...
 
 
 @overload
-def validated[P: ParamSpec, R](
+def validated(
   *, skip_validation_by_default: bool = False
 ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
 @overload
-def validated[P: ParamSpec, R](
+def validated(
   *, skip_validation_by_default: bool = False, warn_only_by_default: bool = False
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]: ...
 
 
-def validated[P: ParamSpec, R](
+def validated(  # noqa: UP047
   func: Callable[P, R] | None = None,
   *,
   skip_validation_by_default: bool = False,
