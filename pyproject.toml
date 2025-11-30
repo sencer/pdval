@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pdval"
+name = "pdval-pandera"
 version = "0.1.6"
 description = "Pandas validation using Annotated types and decorators"
 authors = [{ name = "Sencer S.", email = "nospam@gmail.com" }]
