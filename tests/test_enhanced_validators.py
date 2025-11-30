@@ -106,7 +106,7 @@ class TestHasColumnsEnhanced:
 
     # Fail Positive on 'a'
     invalid_data = pd.DataFrame({"a": [0, 2, 3], "b": [10, 20, 30]})
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(ValueError, match="greater_than"):
       validator.validate(invalid_data)
 
   def test_has_columns_multiple_validators(self):
@@ -139,7 +139,7 @@ class TestHasColumnTemplating:
     assert result.equals(data)
 
     invalid_data = pd.DataFrame({"a": [-1, 2, 3]})
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(ValueError, match="greater_than"):
       ValidatorA.validate(invalid_data)
 
   def test_templating_decorator(self):
@@ -155,5 +155,5 @@ class TestHasColumnTemplating:
     assert process(valid_data) == 30
 
     invalid_data = pd.DataFrame({"price": [-10, 20]})
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(ValueError, match="greater_than"):
       process(invalid_data)

@@ -56,7 +56,7 @@ class Validator[T]:
         schema = pa.DataFrameSchema(checks=checks, coerce=False)
         schema.validate(data)
       elif isinstance(data, pd.Series):
-        schema = pa.SeriesSchema(checks=checks, coerce=False)
+        schema = pa.SeriesSchema(checks=checks, coerce=False, nullable=True)
         schema.validate(data)
     except SchemaError as e:
       # Convert SchemaError to ValueError to match master branch behavior
@@ -70,7 +70,11 @@ class Finite(Validator[pd.Series | pd.DataFrame]):
 
   def get_checks(self) -> list[pa.Check]:
     # Use optimized numpy check
-    return [pa.Check(lambda s: np.isfinite(s.values).all(), error="must be finite")]
+    return [
+      pa.Check(
+        lambda s: np.isfinite(s.values).all(), error="must be finite", ignore_na=False
+      )
+    ]
 
 
 class NonEmpty(Validator[pd.Series | pd.DataFrame | pd.Index]):
@@ -107,7 +111,11 @@ class NonNaN(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-NaN values."""
 
   def get_checks(self) -> list[pa.Check]:
-    return [pa.Check(lambda s: pd.notna(s).all(), error="must not contain NaN")]
+    return [
+      pa.Check(
+        lambda s: pd.notna(s).all(), error="must not contain NaN", ignore_na=False
+      )
+    ]
 
 
 class NonNegative(Validator[pd.Series | pd.DataFrame]):
@@ -306,29 +314,32 @@ class Ge(Validator[pd.Series | pd.DataFrame]):
     if get_origin(items) is Literal:
       items = get_args(items)
 
+    if not isinstance(items, tuple):
+      items = (items,)
+    return cls(*items)
+
   def get_checks(self) -> list[pa.Check]:
     checks = []
     if len(self.targets) == 1:
       target = self.targets[0]
       checks.append(
         pa.Check(
-          lambda s: np.all(s.values >= target),
-          error=f"Data must be >= {target}"
+          lambda s: np.all(s.values >= target), error=f"Data must be >= {target}"
         )
       )
     else:
       for i in range(len(self.targets) - 1):
         col1 = self.targets[i]
-        col2 = self.targets[i+1]
+        col2 = self.targets[i + 1]
         # Ensure col1/col2 are strings for column access
         if isinstance(col1, str) and isinstance(col2, str):
           checks.append(
             pa.Check(
-              lambda df: (
-                np.all(df[col1].values >= df[col2].values)
+              lambda df, c1=col1, c2=col2: (
+                np.all(df[c1].values >= df[c2].values)
                 if isinstance(df, pd.DataFrame)
-                and col1 in df.columns
-                and col2 in df.columns
+                and c1 in df.columns
+                and c2 in df.columns
                 else True
               ),
               name=f"{col1} >= {col2}",
@@ -338,6 +349,8 @@ class Ge(Validator[pd.Series | pd.DataFrame]):
     return checks
 
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    if len(self.targets) > 1 and not isinstance(data, pd.DataFrame):
+      raise TypeError("Ge validator requires a pandas DataFrame for column comparison")
     # Use pandera validation
     return super().validate(data)
 
@@ -352,28 +365,31 @@ class Le(Validator[pd.Series | pd.DataFrame]):
     if get_origin(items) is Literal:
       items = get_args(items)
 
+    if not isinstance(items, tuple):
+      items = (items,)
+    return cls(*items)
+
   def get_checks(self) -> list[pa.Check]:
     checks = []
     if len(self.targets) == 1:
       target = self.targets[0]
       checks.append(
         pa.Check(
-          lambda s: np.all(s.values <= target),
-          error=f"Data must be <= {target}"
+          lambda s: np.all(s.values <= target), error=f"Data must be <= {target}"
         )
       )
     else:
       for i in range(len(self.targets) - 1):
         col1 = self.targets[i]
-        col2 = self.targets[i+1]
+        col2 = self.targets[i + 1]
         if isinstance(col1, str) and isinstance(col2, str):
           checks.append(
             pa.Check(
-              lambda df: (
-                np.all(df[col1].values <= df[col2].values)
+              lambda df, c1=col1, c2=col2: (
+                np.all(df[c1].values <= df[c2].values)
                 if isinstance(df, pd.DataFrame)
-                and col1 in df.columns
-                and col2 in df.columns
+                and c1 in df.columns
+                and c2 in df.columns
                 else True
               ),
               name=f"{col1} <= {col2}",
@@ -383,6 +399,8 @@ class Le(Validator[pd.Series | pd.DataFrame]):
     return checks
 
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    if len(self.targets) > 1 and not isinstance(data, pd.DataFrame):
+      raise TypeError("Le validator requires a pandas DataFrame for column comparison")
     return super().validate(data)
 
 
@@ -396,28 +414,29 @@ class Gt(Validator[pd.Series | pd.DataFrame]):
     if get_origin(items) is Literal:
       items = get_args(items)
 
+    if not isinstance(items, tuple):
+      items = (items,)
+    return cls(*items)
+
   def get_checks(self) -> list[pa.Check]:
     checks = []
     if len(self.targets) == 1:
       target = self.targets[0]
       checks.append(
-        pa.Check(
-          lambda s: np.all(s.values > target),
-          error=f"Data must be > {target}"
-        )
+        pa.Check(lambda s: np.all(s.values > target), error=f"Data must be > {target}")
       )
     else:
       for i in range(len(self.targets) - 1):
         col1 = self.targets[i]
-        col2 = self.targets[i+1]
+        col2 = self.targets[i + 1]
         if isinstance(col1, str) and isinstance(col2, str):
           checks.append(
             pa.Check(
-              lambda df: (
-                np.all(df[col1].values > df[col2].values)
+              lambda df, c1=col1, c2=col2: (
+                np.all(df[c1].values > df[c2].values)
                 if isinstance(df, pd.DataFrame)
-                and col1 in df.columns
-                and col2 in df.columns
+                and c1 in df.columns
+                and c2 in df.columns
                 else True
               ),
               name=f"{col1} > {col2}",
@@ -427,6 +446,8 @@ class Gt(Validator[pd.Series | pd.DataFrame]):
     return checks
 
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    if len(self.targets) > 1 and not isinstance(data, pd.DataFrame):
+      raise TypeError("Gt validator requires a pandas DataFrame for column comparison")
     return super().validate(data)
 
 
@@ -440,28 +461,29 @@ class Lt(Validator[pd.Series | pd.DataFrame]):
     if get_origin(items) is Literal:
       items = get_args(items)
 
+    if not isinstance(items, tuple):
+      items = (items,)
+    return cls(*items)
+
   def get_checks(self) -> list[pa.Check]:
     checks = []
     if len(self.targets) == 1:
       target = self.targets[0]
       checks.append(
-        pa.Check(
-          lambda s: np.all(s.values < target),
-          error=f"Data must be < {target}"
-        )
+        pa.Check(lambda s: np.all(s.values < target), error=f"Data must be < {target}")
       )
     else:
       for i in range(len(self.targets) - 1):
         col1 = self.targets[i]
-        col2 = self.targets[i+1]
+        col2 = self.targets[i + 1]
         if isinstance(col1, str) and isinstance(col2, str):
           checks.append(
             pa.Check(
-              lambda df: (
-                np.all(df[col1].values < df[col2].values)
+              lambda df, c1=col1, c2=col2: (
+                np.all(df[c1].values < df[c2].values)
                 if isinstance(df, pd.DataFrame)
-                and col1 in df.columns
-                and col2 in df.columns
+                and c1 in df.columns
+                and c2 in df.columns
                 else True
               ),
               name=f"{col1} < {col2}",
@@ -471,6 +493,8 @@ class Lt(Validator[pd.Series | pd.DataFrame]):
     return checks
 
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    if len(self.targets) > 1 and not isinstance(data, pd.DataFrame):
+      raise TypeError("Lt validator requires a pandas DataFrame for column comparison")
     return super().validate(data)
 
 
@@ -743,8 +767,10 @@ def validated(  # noqa: UP047
           maybe_empty = False
 
           for item in args[1:]:
+            print(f"DEBUG: Processing item {item}")
             v = _instantiate_validator(item)
             if v:
+              print(f"DEBUG: Validator {v} type {type(v)}")
               if isinstance(v, Nullable):
                 is_nullable = True
               elif isinstance(v, MaybeEmpty):

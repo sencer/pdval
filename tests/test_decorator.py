@@ -587,7 +587,7 @@ class TestDefaultStrictness:
 
     # 2. Fail case: col1 has NaNs
     df_fail_col1 = pd.DataFrame({"col1": [1, np.nan, 3], "col2": [1, 2, 3]})
-    with pytest.raises(ValueError, match="Data must not contain NaN values"):
+    with pytest.raises(ValueError, match="must not contain NaN"):
       process(df_fail_col1)
 
     # 3. Fail case: col2 is empty (only Nullable was opted out)

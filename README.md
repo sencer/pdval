@@ -350,3 +350,11 @@ MIT License - see LICENSE file for details.
 ---
 
 **pdval** - Clean pandas validation through type annotations.
+
+## Installation
+
+```bash
+pip install pdval-pandera
+```
+
+## Features
