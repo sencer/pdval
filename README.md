@@ -347,14 +347,4 @@ MIT License - see LICENSE file for details.
 
 **With pdval:** Express validation constraints directly in type annotations using `Validated[Type, Validator, ...]` and get automatic validation with the `@validated` decorator.
 
----
 
-**pdval** - Clean pandas validation through type annotations.
-
-## Installation
-
-```bash
-pip install pdval-pandera
-```
-
-## Features

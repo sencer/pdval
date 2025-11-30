@@ -190,7 +190,6 @@ class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
         raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
 
       # Check if all expected timestamps are present
-      # Using difference is faster than checking equality of sets or lists
       if not expected_range.difference(index).empty:
         raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
 
@@ -211,8 +210,6 @@ class IsDtype(Validator[pd.Series | pd.DataFrame]):
       if data.dtype != self.dtype:
         raise ValueError(f"Data must be of type {self.dtype}, got {data.dtype}")
     elif isinstance(data, pd.DataFrame):
-      # Check all columns? Or just that the dataframe contains homogenous data?
-      # Usually IsDtype on a DataFrame implies all columns match.
       for col in data.columns:
         if data[col].dtype != self.dtype:
           msg = f"Column '{col}' must be of type {self.dtype}, got {data[col].dtype}"
@@ -245,7 +242,6 @@ class HasColumns(Validator[pd.DataFrame]):
     validators: list[Validator[Any]] = []
 
     for item in items:
-      # Handle Literal inside tuple
       if get_origin(item) is Literal:
         args = get_args(item)
         for arg in args:
@@ -268,18 +264,12 @@ class HasColumns(Validator[pd.DataFrame]):
 
     missing = [col for col in self.columns if col not in data.columns]
     if missing:
-      # Raise ValueError to match master branch behavior
       raise ValueError(f"Missing columns: {missing}")
-
-    # Determine validators to apply
-    # Default: NonNaN and NonEmpty
-    # Opt-out: Nullable, CanBeEmpty
 
     final_validators: list[Validator[Any]] = []
     is_nullable = False
     maybe_empty = False
 
-    # Check for markers in self.validators
     if self.validators:
       for v in self.validators:
         if isinstance(v, Nullable):
@@ -289,7 +279,6 @@ class HasColumns(Validator[pd.DataFrame]):
         else:
           final_validators.append(v)
 
-    # Add defaults if not opted out
     if not is_nullable:
       final_validators.insert(0, NonNaN())
     if not maybe_empty:
@@ -351,7 +340,6 @@ class Ge(Validator[pd.Series | pd.DataFrame]):
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if len(self.targets) > 1 and not isinstance(data, pd.DataFrame):
       raise TypeError("Ge validator requires a pandas DataFrame for column comparison")
-    # Use pandera validation
     return super().validate(data)
 
 
@@ -514,18 +502,10 @@ class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
-    # MonoUp can be checked via pandera for Series/DataFrame, but Index?
-    # Pandera supports Index checks.
-    # But our base validate() only handles DataFrame/Series schemas.
-    # So we should probably keep manual validation for Index, or enhance base validate.
-    # For now, let's keep manual validation for robustness, or use super().validate()
-    # if data is not Index.
     if isinstance(data, pd.Index):
       if not data.is_monotonic_increasing:
         raise ValueError("Index must be monotonically increasing")
       return data
-
-    # For Series/DataFrame, use pandera checks
     return super().validate(data)
 
 
@@ -553,13 +533,7 @@ class MonoDown(Validator[pd.Series | pd.DataFrame | pd.Index]):
 
 
 class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for index properties.
-
-  Can be used to apply validators to the index:
-  - Index[Datetime] - Check index is DatetimeIndex
-  - Index[MonoUp] - Check index is monotonically increasing
-  - Index[Datetime, MonoUp] - Check both
-  """
+  """Validator for index properties."""
 
   def __init__(self, *validators: Validator[Any] | type[Validator[Any]]) -> None:
     self.validators = validators
@@ -575,9 +549,6 @@ class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
     if isinstance(data, (pd.Series, pd.DataFrame)):
-      # Validate index
-      # We can use _build_series_schema logic but applied to index
-      # Or just use the validators directly on the index converted to Series
       s_index = data.index.to_series().reset_index(drop=True)
       for v_item in self.validators:
         v = _instantiate_validator(v_item)
@@ -586,19 +557,12 @@ class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
             if not isinstance(data.index, pd.DatetimeIndex):
               raise ValueError("Index must be DatetimeIndex")
           else:
-            # Run check on index values
             v.validate(s_index)
     return data
 
 
 class HasColumn(Validator[pd.DataFrame]):
-  """Wrapper to apply validators to specific DataFrame columns.
-
-  Supports templating:
-  T = TypeVar("T")
-  CustomVal = HasColumn[T, Positive]
-  CustomVal["my_col"]  # Creates HasColumn("my_col", Positive)
-  """
+  """Wrapper to apply validators to specific DataFrame columns."""
 
   def __init__(
     self,
@@ -625,7 +589,6 @@ class HasColumn(Validator[pd.DataFrame]):
       return cls(items)
 
     # Handle tuple: (column, validators...)
-    # Check if first item is Literal
     if isinstance(items, tuple) and len(items) > 0:
       first = items[0]
       if get_origin(first) is Literal:
@@ -645,14 +608,10 @@ class HasColumn(Validator[pd.DataFrame]):
       column_data = data[self.column]
 
       # Determine validators to apply
-      # Default: NonNaN and NonEmpty
-      # Opt-out: Nullable, CanBeEmpty
-
       final_validators: list[Validator[Any]] = []
       is_nullable = False
       maybe_empty = False
 
-      # Check for markers in self.validators
       for validator_item in self.validators:
         v = _instantiate_validator(validator_item)
         if v:
@@ -663,13 +622,11 @@ class HasColumn(Validator[pd.DataFrame]):
           else:
             final_validators.append(v)
 
-      # Add defaults if not opted out
       if not is_nullable:
         final_validators.insert(0, NonNaN())
       if not maybe_empty:
         final_validators.insert(0, NonEmpty())
 
-      # Apply each validator
       for validator in final_validators:
         column_data = validator.validate(column_data)
     return data
@@ -703,35 +660,7 @@ def validated(  # noqa: UP047
   skip_validation_by_default: bool = False,
   warn_only_by_default: bool = False,
 ) -> Callable[P, R | None] | Callable[[Callable[P, R]], Callable[P, R | None]]:
-  """Decorator to validate function arguments based on Annotated types.
-
-  The decorator automatically adds a `skip_validation` parameter to the function.
-  When `skip_validation=False` (default), validation is performed. When
-  `skip_validation=True`, validation is skipped for maximum performance.
-
-  Args:
-    func: The function to decorate.
-    skip_validation_by_default: If True, `skip_validation` defaults to True.
-    warn_only_by_default: If True, `warn_only` defaults to True. When `warn_only` is
-      True, validation failures log an error and return None instead of raising.
-
-  Returns:
-    The decorated function with automatic validation support.
-
-  Example:
-    >>> from pdval import validated, Validated, Finite
-    >>> import pandas as pd
-    >>>
-    >>> @validated
-    ... def process(data: Validated[pd.Series, Finite]):
-    ...     return data.sum()
-    >>>
-    >>> # Validation enabled by default
-    >>> result = process(valid_data)
-    >>>
-    >>> # Skip validation for performance
-    >>> result = process(valid_data, skip_validation=True)
-  """
+  """Decorator to validate function arguments based on Annotated types."""
 
   def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
     # Inspect function signature
@@ -740,10 +669,9 @@ def validated(  # noqa: UP047
 
     # Pre-compute validators for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}
-    print(f"DEBUG: type_hints keys: {list(type_hints.keys())}")
+    
     for name, _ in sig.parameters.items():
       if name in type_hints:
-        print(f"DEBUG: Checking {name}")
         hint = type_hints[name]
 
         # Handle Optional/Union types
@@ -753,7 +681,6 @@ def validated(  # noqa: UP047
           or str(origin) == "typing.Union"
           or str(origin) == "<class 'types.UnionType'>"
         ):
-          # Check args for Annotated
           for arg in get_args(hint):
             if get_origin(arg) is Annotated:
               hint = arg
@@ -767,10 +694,8 @@ def validated(  # noqa: UP047
           maybe_empty = False
 
           for item in args[1:]:
-            print(f"DEBUG: Processing item {item}")
             v = _instantiate_validator(item)
             if v:
-              print(f"DEBUG: Validator {v} type {type(v)}")
               if isinstance(v, Nullable):
                 is_nullable = True
               elif isinstance(v, MaybeEmpty):
@@ -778,9 +703,7 @@ def validated(  # noqa: UP047
               else:
                 validators.append(v)
 
-          # Check if any validator is HasColumn or HasColumns
-          # If so, we implicitly allow NaNs in the container (disable default NonNaN)
-          # because the user is likely focusing on specific columns.
+          # Implicitly allow NaNs if checking specific columns
           has_column_validator = False
           for v in validators:
             if isinstance(v, (HasColumn, HasColumns)):
@@ -792,16 +715,12 @@ def validated(  # noqa: UP047
             maybe_empty = True
 
           # Add defaults if not opted out
-          # Only apply defaults if the type is pandas Series/DataFrame
-          # We can check the first arg of Annotated (the type)
           annotated_type = args[0]
           is_pandas = False
           try:
             if issubclass(annotated_type, (pd.Series, pd.DataFrame)):
               is_pandas = True
           except TypeError:
-            # annotated_type might be a generic alias or something else
-            # rough check by name or module?
             origin = get_origin(annotated_type)
             if origin is not None:
               if isinstance(origin, type) and issubclass(
