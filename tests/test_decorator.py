@@ -7,8 +7,8 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 import pytest
-from pandera.errors import SchemaError
 from loguru import logger
+from pandera.errors import SchemaError
 
 from pdval import (
   Datetime,

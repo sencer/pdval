@@ -24,8 +24,8 @@ from typing import (
 import numpy as np
 import pandas as pd
 import pandera.pandas as pa
-from pandera.errors import SchemaError
 from loguru import logger
+from pandera.errors import SchemaError
 
 # Validated alias for Annotated
 Validated = Annotated
@@ -504,12 +504,12 @@ def validated[P: ParamSpec, R](
 
 
 @overload
-def validated(
+def validated[P: ParamSpec, R](
   *, skip_validation_by_default: bool = False, warn_only_by_default: bool = False
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]: ...
 
 
-def validated(  # noqa: UP047
+def validated[P: ParamSpec, R](
   func: Callable[P, R] | None = None,
   *,
   skip_validation_by_default: bool = False,
