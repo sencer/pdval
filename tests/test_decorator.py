@@ -2,10 +2,13 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
 # pyright: reportCallIssue=false, reportArgumentType=false
 
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 import pytest
 from pandera.errors import SchemaError
+from loguru import logger
 
 from pdval import (
   Datetime,
@@ -82,7 +85,7 @@ class TestValidatedDecorator:
 
     @validated
     def process(
-      data: Validated[pd.DataFrame, HasColumns["a", "b"], Finite],  # noqa: F821
+      data: Validated[pd.DataFrame, HasColumns[Literal["a", "b"]], Finite],
       validate: bool = True,
     ):
       return data["a"] + data["b"]
@@ -115,8 +118,7 @@ class TestValidatedDecorator:
         return data.sum()
 
     processor = Processor()
-    valid_data = pd.Series([1.0, 2.0, 3.0])
-    result = processor.process(valid_data)  # pyright: ignore[reportAttributeAccessIssue]
+    result = processor.process(pd.Series([1.0, 2.0, 3.0]))  # pyright: ignore[reportAttributeAccessIssue]
     assert result == 6.0
 
   def test_optional_validated_argument(self):
@@ -187,7 +189,9 @@ class TestComplexValidations:
     @validated
     def calculate_true_range(
       data: Validated[
-        pd.DataFrame, HasColumns["high", "low", "close"], Ge["high", "low"]  # noqa: F821
+        pd.DataFrame,
+        HasColumns[Literal["high", "low", "close"]],
+        Ge[Literal["high", "low"]],
       ],
     ):
       hl = data["high"] - data["low"]
@@ -407,3 +411,40 @@ def test_validated_decorator_explicit_false_default():
   # Default: Validation ON
   with pytest.raises(SchemaError):
     process(pd.Series([float("inf")]))
+
+
+def test_warn_only():
+  """Test warn_only functionality and runtime overrides."""
+
+  # Case 1: Default False, Override True
+  @validated(warn_only_by_default=False)
+  def process_strict(data: Validated[pd.Series, Finite]):
+    return data.sum()
+
+  invalid_data = pd.Series([1.0, float("inf")])
+
+  # Should raise by default
+  with pytest.raises(SchemaError):
+    process_strict(invalid_data)
+
+  # Should return None when overridden
+  logs = []
+  handler_id = logger.add(logs.append, format="{message}")
+  try:
+    result = process_strict(invalid_data, warn_only=True)  # pyright: ignore[reportCallIssue]
+    assert result is None
+    assert "Validation failed" in "".join(str(log) for log in logs)
+  finally:
+    logger.remove(handler_id)
+
+  # Case 2: Default True, Override False
+  @validated(warn_only_by_default=True)
+  def process_warn(data: Validated[pd.Series, Finite]):
+    return data.sum()
+
+  # Should return None by default
+  assert process_warn(invalid_data) is None
+
+  # Should raise when overridden
+  with pytest.raises(SchemaError):
+    process_warn(invalid_data, warn_only=False)  # pyright: ignore[reportCallIssue]

@@ -2,6 +2,8 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
 # pyright: reportCallIssue=false, reportAttributeAccessIssue=false, reportArgumentType=false
 
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -256,46 +258,46 @@ class TestHasColumns:
   def test_valid_single_column(self):
     """Test HasColumns validator with single column."""
     data = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    validator = HasColumns["a"]
+    validator = HasColumns[Literal["a"]]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_valid_multiple_columns(self):
     """Test HasColumns validator with multiple columns."""
     data = pd.DataFrame({"a": [1, 2], "b": [3, 4], "c": [5, 6]})
-    validator = HasColumns["a", "b"]
+    validator = HasColumns[Literal["a", "b"]]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_missing_single_column(self):
     """Test HasColumns validator with missing column."""
     data = pd.DataFrame({"a": [1, 2]})
-    validator = HasColumns["b"]
+    validator = HasColumns[Literal["b"]]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_multiple_columns(self):
     """Test HasColumns validator with missing columns."""
     data = pd.DataFrame({"a": [1, 2]})
-    validator = HasColumns["b", "c"]
+    validator = HasColumns[Literal["b", "c"]]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_non_dataframe(self):
     """Test HasColumns validator with non-DataFrame."""
     data = pd.Series([1, 2, 3])
-    validator = HasColumns["a"]
+    validator = HasColumns[Literal["a"]]
     with pytest.raises(TypeError, match="requires a pandas DataFrame"):
       validator.validate(data)
 
   def test_class_getitem_single(self):
     """Test HasColumns __class_getitem__ with single column."""
-    validator = HasColumns["col1"]
+    validator = HasColumns[Literal["col1"]]
     assert validator.columns == ["col1"]
 
   def test_class_getitem_multiple(self):
     """Test HasColumns __class_getitem__ with multiple columns."""
-    validator = HasColumns["col1", "col2", "col3"]
+    validator = HasColumns[Literal["col1", "col2", "col3"]]
     assert validator.columns == ["col1", "col2", "col3"]
 
 
@@ -305,42 +307,42 @@ class TestGe:
   def test_valid_comparison(self):
     """Test Ge validator with valid column comparison."""
     data = pd.DataFrame({"high": [10, 20, 30], "low": [5, 10, 15]})
-    validator = Ge["high", "low"]
+    validator = Ge[Literal["high", "low"]]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_equal_values_allowed(self):
     """Test Ge validator allows equal values."""
     data = pd.DataFrame({"high": [10, 10, 10], "low": [10, 10, 10]})
-    validator = Ge["high", "low"]
+    validator = Ge[Literal["high", "low"]]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_invalid_comparison(self):
     """Test Ge validator rejects invalid comparison."""
     data = pd.DataFrame({"high": [10, 5, 30], "low": [5, 10, 15]})
-    validator = Ge["high", "low"]
+    validator = Ge[Literal["high", "low"]]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_columns(self):
     """Test Ge validator with missing columns."""
     data = pd.DataFrame({"high": [10, 20]})
-    validator = Ge["high", "low"]
+    validator = Ge[Literal["high", "low"]]
     # Should not raise if column is missing
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_class_getitem(self):
     """Test Ge __class_getitem__."""
-    validator = Ge["col1", "col2"]
+    validator = Ge[Literal["col1", "col2"]]
     assert validator.col1 == "col1"
     assert validator.col2 == "col2"
 
   def test_non_dataframe(self):
     """Test Ge validator with non-DataFrame."""
     data = pd.Series([1, 2, 3])
-    validator = Ge["a", "b"]
+    validator = Ge[Literal["a", "b"]]
     with pytest.raises(TypeError, match="requires a pandas DataFrame"):
       validator.validate(data)
 
@@ -522,60 +524,60 @@ class TestHasColumn:
   def test_single_validator(self):
     """Test HasColumn with single validator."""
     data = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [4.0, 5.0, 6.0]})
-    validator = HasColumn["a", Finite]
+    validator = HasColumn[Literal["a"], Finite]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_single_validator_fails(self):
     """Test HasColumn validator fails when column violates constraint."""
     data = pd.DataFrame({"a": [1.0, np.inf, 3.0], "b": [4.0, 5.0, 6.0]})
-    validator = HasColumn["a", Finite]
+    validator = HasColumn[Literal["a"], Finite]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_multiple_validators(self):
     """Test HasColumn with multiple validators."""
     data = pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [4.0, 5.0, 6.0]})
-    validator = HasColumn["a", Finite, Positive]
+    validator = HasColumn[Literal["a"], Finite, Positive]
     result = validator.validate(data)
     assert result.equals(data)
 
   def test_multiple_validators_fails(self):
     """Test HasColumn with multiple validators where one fails."""
     data = pd.DataFrame({"a": [1.0, 0.0, 3.0], "b": [4.0, 5.0, 6.0]})
-    validator = HasColumn["a", Finite, Positive]
+    validator = HasColumn[Literal["a"], Finite, Positive]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_missing_column(self):
     """Test HasColumn with missing column."""
     data = pd.DataFrame({"b": [1.0, 2.0, 3.0]})
-    validator = HasColumn["a", Finite]
+    validator = HasColumn[Literal["a"], Finite]
     with pytest.raises(SchemaError, match=None):
       validator.validate(data)
 
   def test_monotonic_validator(self):
     """Test HasColumn with MonoUp validator."""
     data = pd.DataFrame({"a": [1, 2, 3], "b": [10, 5, 3]})
-    validator = HasColumn["a", MonoUp]
+    validator = HasColumn[Literal["a"], MonoUp]
     result = validator.validate(data)
     assert result.equals(data)
 
     # Column b is not monotonic up
-    validator_b = HasColumn["b", MonoUp]
+    validator_b = HasColumn[Literal["b"], MonoUp]
     with pytest.raises(SchemaError, match=None):
       validator_b.validate(data)
 
   def test_class_getitem(self):
     """Test HasColumn __class_getitem__."""
-    validator = HasColumn["col", Finite, Positive]
+    validator = HasColumn[Literal["col"], Finite, Positive]
     assert validator.column == "col"
     assert len(validator.validators) == 2
 
   def test_class_getitem_no_validators(self):
     """Test HasColumn __class_getitem__ with no validators."""
-    # HasColumn["col"] just checks column existence
-    validator = HasColumn["col"]
+    # HasColumn[Literal["col"]] just checks column existence
+    validator = HasColumn[Literal["col"]]
     assert validator.column == "col"
     assert len(validator.validators) == 0
 
@@ -584,12 +586,12 @@ class TestHasColumn:
     data = pd.DataFrame({"a": [1.0, np.inf, -5.0], "b": [4.0, 5.0, 6.0]})
 
     # Should pass - column exists (even with invalid values)
-    validator = HasColumn["a"]
+    validator = HasColumn[Literal["a"]]
     result = validator.validate(data)
     assert result.equals(data)
 
     # Should fail - column doesn't exist
-    validator_missing = HasColumn["missing"]
+    validator_missing = HasColumn[Literal["missing"]]
     with pytest.raises(SchemaError, match=None):
       validator_missing.validate(data)
 
@@ -602,7 +604,7 @@ class TestHasColumnWithDecorator:
 
     @validated
     def process(
-      data: Validated[pd.DataFrame, HasColumn["price", Finite, Positive]],  # noqa: F821
+      data: Validated[pd.DataFrame, HasColumn[Literal["price"], Finite, Positive]],
       validate: bool = True,
     ):
       return data["price"].sum()
@@ -633,8 +635,8 @@ class TestHasColumnWithDecorator:
     def process(
       data: Validated[
         pd.DataFrame,
-        HasColumn["price", Finite, Positive],  # noqa: F821
-        HasColumn["volume", Positive],  # noqa: F821
+        HasColumn[Literal["price"], Finite, Positive],
+        HasColumn[Literal["volume"], Positive],
       ],
     ):
       return (data["price"] * data["volume"]).sum()
@@ -658,7 +660,7 @@ class TestHasColumnWithDecorator:
 
     @validated
     def process(
-      data: Validated[pd.DataFrame, HasColumn["timestamp", MonoUp]],  # noqa: F821
+      data: Validated[pd.DataFrame, HasColumn[Literal["timestamp"], MonoUp]],
       validate: bool = True,
     ):
       return len(data)
@@ -691,7 +693,9 @@ class TestCombinedValidators:
 
     @validated
     def process(
-      data: Validated[pd.DataFrame, Gt["high", "low"], Le["low", "close"]],  # noqa: F821
+      data: Validated[
+        pd.DataFrame, Gt[Literal["high", "low"]], Le[Literal["low", "close"]]
+      ],
       validate: bool = True,
     ):
       return len(data)
@@ -722,7 +726,7 @@ class TestCombinedValidators:
 
     @validated
     def process(
-      data: Validated[pd.DataFrame, HasColumn["price", NonNaN, Positive]],  # noqa: F821
+      data: Validated[pd.DataFrame, HasColumn[Literal["price"], NonNaN, Positive]],
       validate: bool = True,
     ):
       return data["price"].mean()
