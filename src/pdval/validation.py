@@ -669,7 +669,7 @@ def validated(  # noqa: UP047
 
     # Pre-compute validators for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}
-    
+
     for name, _ in sig.parameters.items():
       if name in type_hints:
         hint = type_hints[name]
