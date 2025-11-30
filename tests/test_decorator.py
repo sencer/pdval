@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pytest
 from loguru import logger
-from pandera.errors import SchemaError
 
 from pdval import (
   Datetime,
@@ -45,7 +44,7 @@ class TestValidatedDecorator:
       return data.sum()
 
     invalid_data = pd.Series([1.0, np.inf, 3.0])
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       process(invalid_data)
 
   def test_validation_can_be_disabled(self):
@@ -73,11 +72,11 @@ class TestValidatedDecorator:
     assert result == 6.0
 
     # Fails Finite check
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       process(pd.Series([1.0, np.nan, 3.0]))
 
     # Fails Positive check
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       process(pd.Series([1.0, 0.0, 3.0]))
 
   def test_dataframe_validation(self):
@@ -95,7 +94,7 @@ class TestValidatedDecorator:
     assert result.tolist() == [4, 6]
 
     # Missing column
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       process(pd.DataFrame({"a": [1, 2]}))
 
   def test_preserves_function_metadata(self):
@@ -139,7 +138,7 @@ class TestValidatedDecorator:
     assert result == 6.0
 
     # Invalid data still raises
-    with pytest.raises(SchemaError):
+    with pytest.raises(ValueError):
       process(pd.Series([1.0, np.inf, 3.0]))
 
   def test_multiple_arguments(self):
@@ -158,11 +157,11 @@ class TestValidatedDecorator:
     assert result.tolist() == [4.0, 6.0]
 
     # First argument invalid
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       combine(pd.Series([np.inf, 2.0]), valid2)
 
     # Second argument invalid
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       combine(valid1, pd.Series([3.0, np.nan]))
 
   def test_non_validated_arguments_ignored(self):
@@ -218,7 +217,7 @@ class TestComplexValidations:
         "close": [101, 104, 102],
       }
     )
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       calculate_true_range(invalid_data)
 
   def test_time_series_validation(self):
@@ -239,7 +238,7 @@ class TestComplexValidations:
 
     # Non-datetime index
     invalid_data = pd.Series(range(10))
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       resample_data(invalid_data)
 
     # Non-monotonic datetime index
@@ -249,7 +248,7 @@ class TestComplexValidations:
       pd.Timestamp("2024-01-02"),
     ]
     non_monotonic = pd.Series([1, 2, 3], index=dates_shuffled)
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       resample_data(non_monotonic)
 
   def test_percentage_returns_validation(self):
@@ -265,11 +264,11 @@ class TestComplexValidations:
     assert len(result) == 4
 
     # Zero price fails Positive check
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       calculate_returns(pd.Series([100.0, 0.0, 101.0]))
 
     # NaN price fails Finite check
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       calculate_returns(pd.Series([100.0, np.nan, 101.0]))
 
 
@@ -306,9 +305,9 @@ class TestEdgeCases:
     assert with_instance(valid_data) == 6.0
 
     # Both should reject invalid data
-    with pytest.raises(SchemaError):
+    with pytest.raises(ValueError):
       with_class(invalid_data)
-    with pytest.raises(SchemaError):
+    with pytest.raises(ValueError):
       with_instance(invalid_data)
 
   def test_function_without_validate_param(self):
@@ -324,7 +323,7 @@ class TestEdgeCases:
 
     # Should still validate and reject invalid data
     invalid_data = pd.Series([1.0, np.inf, 3.0])
-    with pytest.raises(SchemaError, match=None):
+    with pytest.raises(ValueError, match=None):
       process(invalid_data)
 
   def test_kwargs_arguments(self):
@@ -372,7 +371,7 @@ def test_validated_decorator_defaults():
     return data
 
   # Default: Validation ON
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process(pd.Series([float("inf")]))
 
   # Explicit Skip: Validation OFF
@@ -388,7 +387,7 @@ def test_validated_decorator_skip_default():
   process(pd.Series([float("inf")]))
 
   # Explicit Enable: Validation ON
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process(pd.Series([float("inf")]), skip_validation=False)  # pyright: ignore[reportCallIssue]
 
 
@@ -399,7 +398,7 @@ def test_validated_decorator_no_args_call():
     return data
 
   # Default: Validation ON
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process(pd.Series([float("inf")]))
 
 
@@ -409,7 +408,7 @@ def test_validated_decorator_explicit_false_default():
     return data
 
   # Default: Validation ON
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process(pd.Series([float("inf")]))
 
 
@@ -424,7 +423,7 @@ def test_warn_only():
   invalid_data = pd.Series([1.0, float("inf")])
 
   # Should raise by default
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process_strict(invalid_data)
 
   # Should return None when overridden
@@ -446,5 +445,5 @@ def test_warn_only():
   assert process_warn(invalid_data) is None
 
   # Should raise when overridden
-  with pytest.raises(SchemaError):
+  with pytest.raises(ValueError):
     process_warn(invalid_data, warn_only=False)  # pyright: ignore[reportCallIssue]

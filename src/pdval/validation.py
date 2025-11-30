@@ -47,16 +47,20 @@ class Validator[T]:
     if not checks:
       return data
 
-    if isinstance(data, pd.DataFrame):
-      # For DataFrame, we need to know if checks are global or column-specific
-      # Most simple validators (Finite, NonNaN) are element-wise or global
-      # But pandera Checks on DataFrame are usually global unless specified
-      # Let's assume simple validators apply to the whole dataframe
-      schema = pa.DataFrameSchema(checks=checks, coerce=False)
-      schema.validate(data)
-    elif isinstance(data, pd.Series):
-      schema = pa.SeriesSchema(checks=checks, coerce=False)
-      schema.validate(data)
+    try:
+      if isinstance(data, pd.DataFrame):
+        # For DataFrame, we need to know if checks are global or column-specific
+        # Most simple validators (Finite, NonNaN) are element-wise or global
+        # But pandera Checks on DataFrame are usually global unless specified
+        # Let's assume simple validators apply to the whole dataframe
+        schema = pa.DataFrameSchema(checks=checks, coerce=False)
+        schema.validate(data)
+      elif isinstance(data, pd.Series):
+        schema = pa.SeriesSchema(checks=checks, coerce=False)
+        schema.validate(data)
+    except SchemaError as e:
+      # Convert SchemaError to ValueError to match master branch behavior
+      raise ValueError(str(e)) from e
 
     return data
 
@@ -208,8 +212,8 @@ class HasColumns(Validator[pd.DataFrame]):
 
     missing = [col for col in self.columns if col not in data.columns]
     if missing:
-      # Raise SchemaError to match pandera behavior
-      raise SchemaError(schema=None, data=data, message=f"Missing columns: {missing}")
+      # Raise ValueError to match master branch behavior
+      raise ValueError(f"Missing columns: {missing}")
     return data
 
 
@@ -431,9 +435,7 @@ class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
         if v:
           if isinstance(v, Datetime):
             if not isinstance(data.index, pd.DatetimeIndex):
-              raise SchemaError(
-                schema=None, data=data, message="Index must be DatetimeIndex"
-              )
+              raise ValueError("Index must be DatetimeIndex")
           else:
             # Run check on index values
             v.validate(s_index)
@@ -476,11 +478,7 @@ class HasColumn(Validator[pd.DataFrame]):
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if isinstance(data, pd.DataFrame):
       if self.column not in data.columns:
-        raise SchemaError(
-          schema=None,
-          data=data,
-          message=f"Column '{self.column}' not found in DataFrame",
-        )
+        raise ValueError(f"Column '{self.column}' not found in DataFrame")
 
       # Extract column as Series and validate
       series = data[self.column]
