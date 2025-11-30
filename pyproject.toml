@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pdval"
-version = "0.1.4"
+version = "0.1.5"
 description = "Pandas validation using Annotated types and decorators"
 authors = [{ name = "Sencer S.", email = "nospam@gmail.com" }]
 license = { text = "MIT" }
@@ -13,6 +13,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pandas>=2.0.0",
     "numpy>=1.24.0",
+    "loguru>=0.7.0",
 ]
 
 [project.optional-dependencies]
