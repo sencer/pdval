@@ -13,9 +13,12 @@ from pdval import (
   Datetime,
   Finite,
   Ge,
+  HasColumn,
   HasColumns,
   Index,
+  MaybeEmpty,
   MonoUp,
+  Nullable,
   Positive,
   Validated,
   validated,
@@ -63,7 +66,7 @@ class TestValidatedDecorator:
     """Test multiple validators in chain."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite, Positive]):
+    def process(data: Validated[pd.Series, Finite, Positive, Nullable]):
       return data.sum()
 
     # Valid data
@@ -141,13 +144,27 @@ class TestValidatedDecorator:
     with pytest.raises(ValueError):
       process(pd.Series([1.0, np.inf, 3.0]))
 
+  def test_optional_validated_argument_with_nan(self):
+    """Test Optional[Validated[..., Nullable]] allows NaNs."""
+
+    @validated
+    def process(data: Validated[pd.Series, Nullable] | None = None):
+      if data is None:
+        return 0
+      return data.sum()
+
+    # NaNs allowed due to Nullable
+    result = process(pd.Series([1.0, np.nan, 3.0]))
+    # sum() skips NaNs, so result is 4.0
+    assert result == 4.0
+
   def test_multiple_arguments(self):
     """Test validation with multiple arguments."""
 
     @validated
     def combine(
-      data1: Validated[pd.Series, Finite],
-      data2: Validated[pd.Series, Finite],
+      data1: Validated[pd.Series, Finite, Nullable],
+      data2: Validated[pd.Series, Finite, Nullable],
     ):
       return data1 + data2
 
@@ -255,7 +272,8 @@ class TestComplexValidations:
     """Test validation for percentage returns calculation."""
 
     @validated
-    def calculate_returns(prices: Validated[pd.Series, Finite, Positive]):
+    @validated
+    def calculate_returns(prices: Validated[pd.Series, Finite, Positive, Nullable]):
       return prices.pct_change()
 
     # Valid prices
@@ -275,11 +293,22 @@ class TestComplexValidations:
 class TestEdgeCases:
   """Tests for edge cases and error conditions."""
 
-  def test_empty_series(self):
-    """Test validation with empty Series."""
+  def test_empty_series_fails_by_default(self):
+    """Test validation fails with empty Series by default."""
 
     @validated
     def process(data: Validated[pd.Series, Finite]):
+      return len(data)
+
+    empty_data = pd.Series([], dtype=float)
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      process(empty_data)
+
+  def test_empty_series_allowed_with_marker(self):
+    """Test validation allows empty Series with MaybeEmpty."""
+
+    @validated
+    def process(data: Validated[pd.Series, MaybeEmpty]):
       return len(data)
 
     empty_data = pd.Series([], dtype=float)
@@ -447,3 +476,127 @@ def test_warn_only():
   # Should raise when overridden
   with pytest.raises(ValueError):
     process_warn(invalid_data, warn_only=False)  # pyright: ignore[reportCallIssue]
+
+
+class TestDefaultStrictness:
+  """Tests for default NonNaN and NonEmpty behavior."""
+
+  def test_default_non_nan(self):
+    """Test that Validated implies NonNaN by default."""
+
+    @validated
+    def process(data: Validated[pd.Series, None]):
+      return data.sum()
+
+    # Valid data
+    assert process(pd.Series([1, 2, 3])) == 6
+
+    # NaN data fails
+    with pytest.raises(ValueError, match="must not contain NaN"):
+      process(pd.Series([1, np.nan, 3]))
+
+  def test_default_non_empty(self):
+    """Test that Validated implies NonEmpty by default."""
+
+    @validated
+    def process(data: Validated[pd.Series, None]):
+      return len(data)
+
+    # Valid data
+    assert process(pd.Series([1])) == 1
+
+    # Empty data fails
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      process(pd.Series([], dtype=float))
+
+  def test_nullable_opt_out(self):
+    """Test Nullable opts out of NonNaN."""
+
+    @validated
+    def process(data: Validated[pd.Series, Nullable]):
+      return data.sum()
+
+    # NaN data allowed
+    # sum() skips NaNs, so result is 4.0
+    assert process(pd.Series([1, np.nan, 3])) == 4.0
+
+  def test_maybe_empty_opt_out(self):
+    """Test MaybeEmpty opts out of NonEmpty."""
+
+    @validated
+    def process(data: Validated[pd.Series, MaybeEmpty]):
+      return len(data)
+
+    # Empty data allowed
+    assert process(pd.Series([], dtype=float)) == 0
+
+  def test_has_column_defaults(self):
+    """Test HasColumn implies NonNaN and NonEmpty by default."""
+
+    @validated
+    def process(data: Validated[pd.DataFrame, HasColumn["a"]]):  # noqa: F821
+      return data["a"].sum()
+
+    # Valid
+    assert process(pd.DataFrame({"a": [1, 2]})) == 3
+
+    # NaN fails
+    with pytest.raises(ValueError, match="must not contain NaN"):
+      process(pd.DataFrame({"a": [1, np.nan]}))
+
+    # Empty fails (HasColumn checks column data)
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      process(pd.DataFrame({"a": []}, dtype=float))
+
+  def test_has_column_opt_out(self):
+    """Test HasColumn opt-out."""
+
+    @validated
+    def process(
+      data: Validated[
+        pd.DataFrame, HasColumn["a", Nullable, MaybeEmpty]  # noqa: F821
+      ],
+    ):
+      return len(data)
+
+    # Empty allowed
+    process(pd.DataFrame({"a": []}, dtype=float))
+
+  def test_mixed_column_validation(self):
+    """Test mixed strict and nullable columns."""
+
+    @validated
+    def process(
+      data: Validated[
+        pd.DataFrame,
+        HasColumn["col1"],  # noqa: F821
+        HasColumn["col2", Nullable],  # noqa: F821
+      ],
+    ):
+      return len(data)
+
+    # 1. Valid case: col1 strict, col2 has NaNs, col3 has NaNs
+    df_valid = pd.DataFrame(
+      {
+        "col1": [1, 2, 3],
+        "col2": [1, np.nan, 3],
+        "col3": [np.nan, np.nan, np.nan],  # Unspecified column with NaNs
+      }
+    )
+    assert process(df_valid) == 3
+
+    # 2. Fail case: col1 has NaNs
+    df_fail_col1 = pd.DataFrame({"col1": [1, np.nan, 3], "col2": [1, 2, 3]})
+    with pytest.raises(ValueError, match="Data must not contain NaN values"):
+      process(df_fail_col1)
+
+    # 3. Fail case: col2 is empty (only Nullable was opted out)
+    # Note: HasColumn extracts the column as Series.
+    # If the DF is not empty but the column is empty?
+    # A column in a non-empty DF cannot be empty (length matches index).
+    # So we test with an empty DataFrame that has these columns.
+    # But wait, if DF is empty, then col1 is empty.
+    # col1 is Strict -> NonEmpty -> Fails.
+    df_empty = pd.DataFrame({"col1": [], "col2": []}, dtype=float)
+    with pytest.raises(ValueError, match="Data must not be empty"):
+      process(df_empty)

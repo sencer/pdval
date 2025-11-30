@@ -335,8 +335,7 @@ class TestGe:
   def test_class_getitem(self):
     """Test Ge __class_getitem__."""
     validator = Ge[Literal["col1", "col2"]]
-    assert validator.col1 == "col1"
-    assert validator.col2 == "col2"
+    assert validator.targets == ("col1", "col2")
 
   def test_non_dataframe(self):
     """Test Ge validator with non-DataFrame."""
@@ -373,8 +372,7 @@ class TestLe:
   def test_class_getitem(self):
     """Test Le __class_getitem__."""
     validator = Le["col1", "col2"]
-    assert validator.col1 == "col1"
-    assert validator.col2 == "col2"
+    assert validator.targets == ("col1", "col2")
 
 
 class TestGt:
@@ -404,8 +402,7 @@ class TestGt:
   def test_class_getitem(self):
     """Test Gt __class_getitem__."""
     validator = Gt["col1", "col2"]
-    assert validator.col1 == "col1"
-    assert validator.col2 == "col2"
+    assert validator.targets == ("col1", "col2")
 
 
 class TestLt:
@@ -435,8 +432,7 @@ class TestLt:
   def test_class_getitem(self):
     """Test Lt __class_getitem__."""
     validator = Lt["col1", "col2"]
-    assert validator.col1 == "col1"
-    assert validator.col2 == "col2"
+    assert validator.targets == ("col1", "col2")
 
 
 class TestMonoUp:
