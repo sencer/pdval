@@ -4,10 +4,10 @@
 
 from typing import Literal
 
+from loguru import logger
 import numpy as np
 import pandas as pd
 import pytest
-from loguru import logger
 
 from pdval import (
   Datetime,
@@ -88,7 +88,6 @@ class TestValidatedDecorator:
     @validated
     def process(
       data: Validated[pd.DataFrame, HasColumns[Literal["a", "b"]], Finite],
-      validate: bool = True,
     ):
       return data["a"] + data["b"]
 
@@ -216,24 +215,20 @@ class TestComplexValidations:
       return pd.concat([hl, hc, lc], axis=1).max(axis=1)
 
     # Valid OHLC
-    valid_data = pd.DataFrame(
-      {
-        "high": [102, 105, 104],
-        "low": [100, 103, 101],
-        "close": [101, 104, 102],
-      }
-    )
+    valid_data = pd.DataFrame({
+      "high": [102, 105, 104],
+      "low": [100, 103, 101],
+      "close": [101, 104, 102],
+    })
     result = calculate_true_range(valid_data)
     assert len(result) == 3
 
     # High < Low should fail
-    invalid_data = pd.DataFrame(
-      {
-        "high": [100, 105, 104],
-        "low": [102, 103, 101],
-        "close": [101, 104, 102],
-      }
-    )
+    invalid_data = pd.DataFrame({
+      "high": [100, 105, 104],
+      "low": [102, 103, 101],
+      "close": [101, 104, 102],
+    })
     with pytest.raises(ValueError, match="high must be >= low"):
       calculate_true_range(invalid_data)
 
@@ -381,8 +376,10 @@ class TestEdgeCases:
 
     @validated
     def process(
-      data: Validated[pd.Series, Finite] = pd.Series([1.0, 2.0]),
+      data: Validated[pd.Series, Finite] | None = None,
     ):
+      if data is None:
+        data = pd.Series([1.0, 2.0])
       return data.sum()
 
     # No arguments (uses default)
@@ -576,13 +573,11 @@ class TestDefaultStrictness:
       return len(data)
 
     # 1. Valid case: col1 strict, col2 has NaNs, col3 has NaNs
-    df_valid = pd.DataFrame(
-      {
-        "col1": [1, 2, 3],
-        "col2": [1, np.nan, 3],
-        "col3": [np.nan, np.nan, np.nan],  # Unspecified column with NaNs
-      }
-    )
+    df_valid = pd.DataFrame({
+      "col1": [1, 2, 3],
+      "col2": [1, np.nan, 3],
+      "col3": [np.nan, np.nan, np.nan],  # Unspecified column with NaNs
+    })
     assert process(df_valid) == 3
 
     # 2. Fail case: col1 has NaNs

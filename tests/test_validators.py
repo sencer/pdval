@@ -600,7 +600,6 @@ class TestHasColumnWithDecorator:
     @validated
     def process(
       data: Validated[pd.DataFrame, HasColumn[Literal["price"], Finite, Positive]],
-      validate: bool = True,
     ):
       return data["price"].sum()
 
@@ -609,12 +608,10 @@ class TestHasColumnWithDecorator:
     assert result == 450.0
 
     # Fails Finite check
-    invalid_data = pd.DataFrame(
-      {
-        "price": [100.0, np.inf, 150.0],
-        "volume": [10, 20, 15],
-      }
-    )
+    invalid_data = pd.DataFrame({
+      "price": [100.0, np.inf, 150.0],
+      "volume": [10, 20, 15],
+    })
     with pytest.raises(ValueError, match="must be finite"):
       process(invalid_data)
 
@@ -641,12 +638,10 @@ class TestHasColumnWithDecorator:
     assert result == 100 * 10 + 200 * 20 + 150 * 15
 
     # Fails volume Positive check
-    invalid_data = pd.DataFrame(
-      {
-        "price": [100.0, 200.0, 150.0],
-        "volume": [10, -5, 15],
-      }
-    )
+    invalid_data = pd.DataFrame({
+      "price": [100.0, 200.0, 150.0],
+      "volume": [10, -5, 15],
+    })
     with pytest.raises(ValueError, match="must be positive"):
       process(invalid_data)
 
@@ -656,26 +651,21 @@ class TestHasColumnWithDecorator:
     @validated
     def process(
       data: Validated[pd.DataFrame, HasColumn[Literal["timestamp"], MonoUp]],
-      validate: bool = True,
     ):
       return len(data)
 
-    valid_data = pd.DataFrame(
-      {
-        "timestamp": [1, 2, 3, 4, 5],
-        "value": [10, 20, 30, 40, 50],
-      }
-    )
+    valid_data = pd.DataFrame({
+      "timestamp": [1, 2, 3, 4, 5],
+      "value": [10, 20, 30, 40, 50],
+    })
     result = process(valid_data)
     assert result == 5
 
     # Fails MonoUp check
-    invalid_data = pd.DataFrame(
-      {
-        "timestamp": [1, 2, 5, 4, 3],
-        "value": [10, 20, 30, 40, 50],
-      }
-    )
+    invalid_data = pd.DataFrame({
+      "timestamp": [1, 2, 5, 4, 3],
+      "value": [10, 20, 30, 40, 50],
+    })
     with pytest.raises(ValueError, match="must be monotonically increasing"):
       process(invalid_data)
 
@@ -691,28 +681,23 @@ class TestCombinedValidators:
       data: Validated[
         pd.DataFrame, Gt[Literal["high", "low"]], Le[Literal["low", "close"]]
       ],
-      validate: bool = True,
     ):
       return len(data)
 
-    valid_data = pd.DataFrame(
-      {
-        "high": [105, 110, 108],
-        "low": [100, 105, 103],
-        "close": [102, 107, 105],
-      }
-    )
+    valid_data = pd.DataFrame({
+      "high": [105, 110, 108],
+      "low": [100, 105, 103],
+      "close": [102, 107, 105],
+    })
     result = process(valid_data)
     assert result == 3
 
     # Fails Gt check (high not > low)
-    invalid_data = pd.DataFrame(
-      {
-        "high": [100, 110, 108],
-        "low": [100, 105, 103],
-        "close": [102, 107, 105],
-      }
-    )
+    invalid_data = pd.DataFrame({
+      "high": [100, 110, 108],
+      "low": [100, 105, 103],
+      "close": [102, 107, 105],
+    })
     with pytest.raises(ValueError, match="high must be > low"):
       process(invalid_data)
 
@@ -722,7 +707,6 @@ class TestCombinedValidators:
     @validated
     def process(
       data: Validated[pd.DataFrame, HasColumn[Literal["price"], NonNaN, Positive]],
-      validate: bool = True,
     ):
       return data["price"].mean()
 
