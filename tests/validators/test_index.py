@@ -1,11 +1,11 @@
-"""Tests for index validators: Datetime, UniqueIndex, MonoUp, MonoDown, Index."""
+"""Tests for index validators: Datetime, Unique, MonoUp, MonoDown, Index."""
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
 # pyright: reportCallIssue=false, reportAttributeAccessIssue=false
 
 import pandas as pd
 import pytest
 
-from pdval import Datetime, Index, MonoDown, MonoUp, UniqueIndex
+from pdval import Datetime, Index, MonoDown, MonoUp, Unique
 
 
 class TestDatetime:
@@ -41,23 +41,49 @@ class TestDatetime:
     assert result == [1, 2, 3]
 
 
-class TestUniqueIndex:
-  """Tests for UniqueIndex validator."""
+class TestUnique:
+  """Tests for Unique validator."""
 
-  def test_unique_index_series(self):
-    validator = UniqueIndex()
+  def test_unique_series(self):
+    validator = Unique()
 
     # Valid
-    data = pd.Series([1, 2], index=[1, 2])
+    data = pd.Series([1, 2, 3])
     assert validator.validate(data) is data
 
     # Invalid
-    data = pd.Series([1, 2], index=[1, 1])
-    with pytest.raises(ValueError, match="Index must be unique"):
+    data = pd.Series([1, 2, 1])
+    with pytest.raises(ValueError, match="Values must be unique"):
       validator.validate(data)
 
-  def test_unique_index_dataframe(self):
-    validator = UniqueIndex()
+  def test_unique_index(self):
+    validator = Unique()
+
+    # Valid
+    index = pd.Index([1, 2, 3])
+    assert validator.validate(index).equals(index)
+
+    # Invalid
+    index = pd.Index([1, 2, 1])
+    with pytest.raises(ValueError, match="Values must be unique"):
+      validator.validate(index)
+
+  def test_index_unique_series(self):
+    """Test Index[Unique] with Series."""
+    validator = Index[Unique]
+
+    # Valid
+    data = pd.Series([1, 2, 3], index=[1, 2, 3])
+    assert validator.validate(data) is data
+
+    # Invalid
+    data = pd.Series([1, 2, 3], index=[1, 1, 3])
+    with pytest.raises(ValueError, match="Values must be unique"):
+      validator.validate(data)
+
+  def test_index_unique_dataframe(self):
+    """Test Index[Unique] with DataFrame."""
+    validator = Index[Unique]
 
     # Valid
     data = pd.DataFrame({"a": [1, 2]}, index=pd.Index([1, 2]))
@@ -65,22 +91,8 @@ class TestUniqueIndex:
 
     # Invalid
     data = pd.DataFrame({"a": [1, 2]}, index=pd.Index([1, 1]))
-    with pytest.raises(ValueError, match="Index must be unique"):
+    with pytest.raises(ValueError, match="Values must be unique"):
       validator.validate(data)
-
-  def test_uniqueindex_on_index_object(self):
-    """Test UniqueIndex validator on Index object."""
-    index = pd.Index([1, 2, 3, 4, 5])
-    validator = UniqueIndex()
-    result = validator.validate(index)
-    assert result.equals(index)
-
-  def test_uniqueindex_on_non_unique_index(self):
-    """Test UniqueIndex fails on non-unique Index object."""
-    index = pd.Index([1, 2, 2, 4, 5])
-    validator = UniqueIndex()
-    with pytest.raises(ValueError, match="Index must be unique"):
-      validator.validate(index)
 
 
 class TestMonoUp:
@@ -107,18 +119,18 @@ class TestMonoUp:
     with pytest.raises(ValueError, match="must be monotonically increasing"):
       validator.validate(data)
 
-  def test_valid_dataframe(self):
-    """Test MonoUp validator with DataFrame."""
-    data = pd.DataFrame({"a": [1, 2, 3], "b": [10, 20, 30]})
+  def test_valid_index(self):
+    """Test MonoUp validator with valid increasing Index."""
+    data = pd.Index([1, 2, 3, 4, 5])
     validator = MonoUp()
     result = validator.validate(data)
     assert result.equals(data)
 
-  def test_invalid_dataframe(self):
-    """Test MonoUp validator rejects DataFrame with non-monotonic column."""
-    data = pd.DataFrame({"a": [1, 2, 3], "b": [10, 5, 30]})
+  def test_invalid_index(self):
+    """Test MonoUp validator rejects non-monotonic Index."""
+    data = pd.Index([1, 2, 3, 2, 5])
     validator = MonoUp()
-    with pytest.raises(ValueError, match="Column 'b' values must be monotonically"):
+    with pytest.raises(ValueError, match="must be monotonically increasing"):
       validator.validate(data)
 
   def test_index_monoup(self):
@@ -132,7 +144,7 @@ class TestMonoUp:
     """Test Index[MonoUp] validator rejects non-monotonic index."""
     data = pd.Series([1, 2, 3], index=[0, 2, 1])
     validator = Index[MonoUp]
-    with pytest.raises(ValueError, match="Index must be monotonically increasing"):
+    with pytest.raises(ValueError, match="must be monotonically increasing"):
       validator.validate(data)
 
   def test_datetime_monotonic(self):
@@ -152,7 +164,7 @@ class TestMonoUp:
     ]
     data = pd.Series([1, 2, 3], index=dates)
     validator = Index[MonoUp]
-    with pytest.raises(ValueError, match="Index must be monotonically increasing"):
+    with pytest.raises(ValueError, match="must be monotonically increasing"):
       validator.validate(data)
 
 
@@ -180,18 +192,18 @@ class TestMonoDown:
     with pytest.raises(ValueError, match="must be monotonically decreasing"):
       validator.validate(data)
 
-  def test_valid_dataframe(self):
-    """Test MonoDown validator with DataFrame."""
-    data = pd.DataFrame({"a": [3, 2, 1], "b": [30, 20, 10]})
+  def test_valid_index(self):
+    """Test MonoDown validator with valid decreasing Index."""
+    data = pd.Index([5, 4, 3, 2, 1])
     validator = MonoDown()
     result = validator.validate(data)
     assert result.equals(data)
 
-  def test_invalid_dataframe(self):
-    """Test MonoDown validator rejects DataFrame with non-monotonic column."""
-    data = pd.DataFrame({"a": [3, 2, 1], "b": [30, 35, 10]})
+  def test_invalid_index(self):
+    """Test MonoDown validator rejects non-monotonic Index."""
+    data = pd.Index([5, 4, 3, 4, 1])
     validator = MonoDown()
-    with pytest.raises(ValueError, match="Column 'b' values must be monotonically"):
+    with pytest.raises(ValueError, match="must be monotonically decreasing"):
       validator.validate(data)
 
 
@@ -201,14 +213,14 @@ class TestIndexValidator:
   def test_index_with_non_dataframe(self):
     """Test Index validator with Index object (no-op)."""
     index = pd.Index([1, 2, 3, 4, 5])
-    validator = Index[UniqueIndex]
+    validator = Index[Unique]
     result = validator.validate(index)
     assert result.equals(index)
 
   def test_index_with_validator_instance(self):
     """Test Index validator with validator instance."""
     df = pd.DataFrame({"a": [1, 2, 3]}, index=[0, 1, 2])
-    validator = Index(UniqueIndex())
+    validator = Index(Unique())
     result = validator.validate(df)
     assert result.equals(df)
 

@@ -30,8 +30,9 @@ from pdval.validators import (
   NonNegative,
   NoTimeGaps,
   Nullable,
+  OneOf,
   Positive,
-  UniqueIndex,
+  Unique,
 )
 
 __all__ = [
@@ -61,8 +62,9 @@ __all__ = [
   "NonNegative",
   # Markers
   "Nullable",
+  "OneOf",
   "Positive",
-  "UniqueIndex",
+  "Unique",
   # Base
   "Validated",
   "Validator",

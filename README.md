@@ -41,7 +41,6 @@ from pdval import validated, Validated, Finite, NonNaN
 @validated
 def calculate_returns(
     prices: Validated[pd.Series, Finite, NonNaN],
-    validate: bool = True
 ) -> pd.Series:
     """Calculate percentage returns from prices."""
     return prices.pct_change()
@@ -53,25 +52,34 @@ returns = calculate_returns(prices)
 # Invalid data raises ValueError
 import numpy as np
 bad_prices = pd.Series([100.0, np.inf, 101.0])
-# Raises: ValueError: Data must be finite (no Inf, no NaN)
+# Raises: ValueError: Data must be finite (contains Inf)
 calculate_returns(bad_prices)
 ```
 
 ## Available Validators
 
-### Value Validators
+### Value Validators (Series/Index)
 
 - **`Finite`** - Ensures no Inf or NaN values
 - **`NonNaN`** - Ensures no NaN values (allows Inf)
 - **`NonNegative`** - Ensures all values >= 0
 - **`Positive`** - Ensures all values > 0
+- **`NonEmpty`** - Ensures data is not empty
+- **`Unique`** - Ensures all values are unique
 - **`MonoUp`** - Ensures values are monotonically increasing
 - **`MonoDown`** - Ensures values are monotonically decreasing
+- **`Datetime`** - Ensures data is a DatetimeIndex
+- **`OneOf["a", "b", "c"]`** - Ensures values are in allowed set (categorical)
 
-### Index Validators
 
-- **`DateTimeIndexed`** - Ensures index is a DatetimeIndex
-- **`MonotonicIndex`** - Ensures index is monotonically increasing
+### Index Wrapper
+
+The `Index[]` wrapper allows you to apply any Series/Index validator to the index of a Series or DataFrame:
+
+- **`Index[Datetime]`** - Ensures index is a DatetimeIndex
+- **`Index[MonoUp]`** - Ensures index is monotonically increasing
+- **`Index[Unique]`** - Ensures index values are unique
+- **`Index[Datetime, MonoUp, Unique]`** - Combine multiple validators
 
 ### DataFrame Column Validators
 
@@ -83,8 +91,19 @@ calculate_returns(bad_prices)
 
 ### Column-Specific Validators
 
-- **`HasColumn["col"]`** - Check that DataFrame has column (no validation)
+- **`HasColumn["col"]`** - Check that DataFrame has column (with default NonNaN, NonEmpty)
 - **`HasColumn["col", Validator, ...]`** - Check column exists and apply Series validators
+
+### Gap Validators (Time Series)
+
+- **`NoTimeGaps`** - Ensures no gaps in datetime values/index
+- **`MaxGap[timedelta]`** - Ensures maximum gap between datetime values
+- **`MaxDiff[value]`** - Ensures maximum difference between consecutive values
+
+### Markers (Opt-out)
+
+- **`Nullable`** - Opt out of default NonNaN check
+- **`MaybeEmpty`** - Opt out of default NonEmpty check
 
 ## Examples
 
@@ -92,11 +111,12 @@ calculate_returns(bad_prices)
 
 ```python
 from pdval import validated, Validated, Positive
+import numpy as np
+import pandas as pd
 
 @validated
 def calculate_log_returns(
     prices: Validated[pd.Series, Positive],
-    validate: bool = True
 ) -> pd.Series:
     """Calculate log returns - prices must be positive."""
     return np.log(prices / prices.shift(1))
@@ -109,11 +129,11 @@ log_returns = calculate_log_returns(prices)
 
 ```python
 from pdval import validated, Validated, HasColumns, Ge, NonNaN
+import pandas as pd
 
 @validated
 def calculate_true_range(
     data: Validated[pd.DataFrame, HasColumns["high", "low", "close"], Ge["high", "low"], NonNaN],
-    validate: bool = True
 ) -> pd.Series:
     """Calculate True Range - requires OHLC data."""
     hl = data["high"] - data["low"]
@@ -135,16 +155,16 @@ bad_data = pd.DataFrame({"high": [102], "close": [101]})
 calculate_true_range(bad_data)
 ```
 
-### Time Series Validation
+### Time Series Validation with Index
 
 ```python
-from pdval import validated, Validated, DateTimeIndexed, MonotonicIndex, Finite
+from pdval import validated, Validated, Index, Datetime, MonoUp, Finite
+import pandas as pd
 
 @validated
 def resample_ohlc(
-    data: Validated[pd.DataFrame, DateTimeIndexed, MonotonicIndex, Finite],
+    data: Validated[pd.DataFrame, Index[Datetime, MonoUp], Finite],
     freq: str = "1D",
-    validate: bool = True
 ) -> pd.DataFrame:
     """Resample OHLC data to different frequency."""
     return data.resample(freq).agg({
@@ -155,7 +175,7 @@ def resample_ohlc(
     })
 
 # Valid time series
-dates = pd.date_range("2024-01-01", periods=10, freq="1H")
+dates = pd.date_range("2024-01-01", periods=10, freq="1h")
 data = pd.DataFrame({
     "open": range(100, 110),
     "high": range(101, 111),
@@ -171,15 +191,75 @@ bad_data.index = range(len(bad_data))
 resample_ohlc(bad_data)
 ```
 
+### Unique Values Validation
+
+```python
+from pdval import validated, Validated, Index, Unique
+import pandas as pd
+
+@validated
+def process_unique_ids(
+    data: Validated[pd.DataFrame, Index[Unique]],
+) -> pd.DataFrame:
+    """Process data with unique index values."""
+    return data.sort_index()
+
+# Valid unique index
+df = pd.DataFrame({"a": [1, 2, 3]}, index=["x", "y", "z"])
+result = process_unique_ids(df)
+
+# Duplicate index values raise error
+bad_df = pd.DataFrame({"a": [1, 2, 3]}, index=["x", "x", "z"])
+# Raises: ValueError: Values must be unique
+process_unique_ids(bad_df)
+```
+
+### Categorical Values Validation
+
+```python
+from typing import Literal
+from pdval import validated, Validated, OneOf, HasColumn
+import pandas as pd
+
+@validated
+def process_orders(
+    data: Validated[pd.DataFrame, HasColumn["status", OneOf["pending", "shipped", "delivered"]]],
+) -> pd.DataFrame:
+    """Process orders with validated status column."""
+    return data[data["status"] != "pending"]
+
+# Valid data
+orders = pd.DataFrame({
+    "order_id": [1, 2, 3],
+    "status": ["pending", "shipped", "delivered"]
+})
+result = process_orders(orders)
+
+# Invalid status raises error
+bad_orders = pd.DataFrame({
+    "order_id": [1, 2],
+    "status": ["pending", "cancelled"]  # "cancelled" not in allowed values
+})
+# Raises: ValueError: Values must be one of {'pending', 'shipped', 'delivered'}, got invalid: {'cancelled'}
+process_orders(bad_orders)
+
+# Also works with Literal type syntax
+@validated
+def process_with_literal(
+    data: Validated[pd.Series, OneOf[Literal["a", "b", "c"]]],
+) -> pd.Series:
+    return data
+```
+
 ### Monotonic Value Validation
 
 ```python
 from pdval import validated, Validated, MonoUp, MonoDown
+import pandas as pd
 
 @validated
 def calculate_cumulative_returns(
     prices: Validated[pd.Series, MonoUp],
-    validate: bool = True
 ) -> pd.Series:
     """Calculate cumulative returns - prices must be monotonically increasing."""
     return (prices / prices.iloc[0]) - 1
@@ -187,7 +267,6 @@ def calculate_cumulative_returns(
 @validated
 def track_drawdown(
     equity: Validated[pd.Series, MonoDown],
-    validate: bool = True
 ) -> pd.Series:
     """Track drawdown - equity must be monotonically decreasing."""
     return (equity / equity.iloc[0]) - 1
@@ -197,6 +276,7 @@ def track_drawdown(
 
 ```python
 from pdval import validated, Validated, HasColumn, Finite, Positive, MonoUp
+import pandas as pd
 
 @validated
 def process_trading_data(
@@ -206,7 +286,6 @@ def process_trading_data(
         HasColumn["volume", Finite, Positive],
         HasColumn["timestamp", MonoUp],
     ],
-    validate: bool = True
 ) -> pd.DataFrame:
     """Process trading data with column-specific validation.
 
@@ -218,40 +297,39 @@ def process_trading_data(
         notional=data["price"] * data["volume"]
     )
 
-# Or just check column presence without validation:
+# Or just check column presence (with default NonNaN, NonEmpty):
 @validated
 def simple_check(
     data: Validated[pd.DataFrame, HasColumn["price"], HasColumn["volume"]],
-    validate: bool = True
 ) -> float:
-    """Just check columns exist, no value validation."""
+    """Just check columns exist and have valid values."""
     return (data["price"] * data["volume"]).sum()
 ```
 
-### Chaining Multiple Validators
+### Chaining Multiple Index Validators
 
 ```python
-from pdval import validated, Validated, Finite, Positive, DateTimeIndexed
+from pdval import validated, Validated, Index, Datetime, MonoUp, Unique, Finite, Positive
+import pandas as pd
 
 @validated
 def calculate_volume_profile(
-    volume: Validated[pd.Series, DateTimeIndexed, Finite, Positive],
-    validate: bool = True
+    volume: Validated[pd.Series, Index[Datetime, MonoUp, Unique], Finite, Positive],
 ) -> pd.Series:
-    """Calculate volume profile - must be datetime-indexed, finite, positive."""
+    """Calculate volume profile - must be datetime-indexed, monotonic, unique, finite, positive."""
     return volume.groupby(volume.index.hour).sum()
 ```
 
 ### Optional Validation
 
-The `validate` parameter allows you to disable validation for performance:
+Use `skip_validation` to disable validation for performance:
 
 ```python
 # Validation enabled (default)
-result = calculate_returns(prices, validate=True)
+result = calculate_returns(prices)
 
 # Validation disabled for performance
-result = calculate_returns(prices, validate=False)
+result = calculate_returns(prices, skip_validation=True)
 ```
 
 ### Custom Validators
@@ -278,7 +356,6 @@ class InRange(Validator):
 @validated
 def normalize_percentage(
     data: Validated[pd.Series, InRange(0, 100)],
-    validate: bool = True
 ) -> pd.Series:
     """Normalize percentage data to [0, 1] range."""
     return data / 100
@@ -294,7 +371,7 @@ According to PEP 593, `Annotated[T, metadata]` (which `Validated` is an alias fo
 
 ```python
 @validated
-def process(data: Validated[pd.Series, Finite], validate: bool = True) -> float:
+def process(data: Validated[pd.Series, Finite]) -> float:
     return data.sum()
 
 # Type checkers understand that pd.Series is compatible with Validated[pd.Series, ...]
@@ -307,6 +384,30 @@ The validation metadata is:
 - **Ignored by type checkers** - `Validated[pd.Series, Finite]` is treated as `pd.Series`
 
 This gives you the best of both worlds: clean type checking and runtime validation.
+
+## Default Strictness
+
+By default, `pdval` applies `NonNaN` and `NonEmpty` checks to all validated arguments. This can be opted out with markers:
+
+```python
+from pdval import validated, Validated, Nullable, MaybeEmpty
+import pandas as pd
+
+@validated
+def process_with_defaults(data: Validated[pd.Series, None]) -> float:
+    """NaN and empty data will raise ValueError by default."""
+    return data.sum()
+
+@validated
+def process_nullable(data: Validated[pd.Series, Nullable]) -> float:
+    """NaN values are allowed."""
+    return data.sum()
+
+@validated
+def process_maybe_empty(data: Validated[pd.Series, MaybeEmpty]) -> int:
+    """Empty data is allowed."""
+    return len(data)
+```
 
 ## Comparison with Pandera
 
@@ -323,7 +424,7 @@ Use `pdval` when you want simple, inline validation. Use Pandera when you need c
 
 `pdval` is designed to be lightweight with minimal overhead:
 
-- Validation checks are only performed when `validate=True`
+- Validation checks are only performed when `skip_validation=False` (default)
 - No schema compilation or complex preprocessing
 - Direct numpy/pandas operations for validation
 - Optional validation can be disabled for production performance
@@ -347,4 +448,3 @@ MIT License - see LICENSE file for details.
 **Traditional approach:** Add manual validation checks at the start of each function.
 
 **With pdval:** Express validation constraints directly in type annotations using `Validated[Type, Validator, ...]` and get automatic validation with the `@validated` decorator.
-
