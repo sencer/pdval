@@ -46,14 +46,26 @@ class ValidatorMarker:
 
 
 class Finite(Validator[pd.Series | pd.DataFrame]):
-  """Validator for finite values (no Inf, no NaN)."""
+  """Validator for finite values (no Inf, no NaN).
+
+  Checks for both NaN and infinite values using pandas methods
+  for compatibility with all numeric dtypes.
+  """
 
   @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
-    if isinstance(data, (pd.Series, pd.DataFrame)) and not np.all(
-      np.isfinite(data.values)  # type: ignore[arg-type]
-    ):
-      raise ValueError("Data must be finite (no Inf, no NaN)")
+    if isinstance(data, (pd.Series, pd.DataFrame)):
+      # Check for NaN (axis=None returns scalar bool, pandas-stubs typing issue)
+      if data.isna().any(axis=None):  # pyright: ignore[reportArgumentType,reportGeneralTypeIssues]
+        raise ValueError("Data must be finite (contains NaN)")
+      # Check for infinite values (only for numeric data)
+      numeric_data = (
+        data.select_dtypes(include=[np.number])
+        if isinstance(data, pd.DataFrame)
+        else data
+      )
+      if len(numeric_data) > 0 and np.any(np.isinf(numeric_data.values)):  # type: ignore[arg-type]
+        raise ValueError("Data must be finite (contains Inf)")
     return data
 
 
@@ -78,13 +90,15 @@ class MaybeEmpty(ValidatorMarker):
 
 
 class NonNaN(Validator[pd.Series | pd.DataFrame]):
-  """Validator for non-NaN values."""
+  """Validator for non-NaN values.
+
+  Uses pd.isna() for compatibility with all dtypes including object columns.
+  """
 
   @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
-    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(
-      np.isnan(data.values)  # type: ignore[arg-type]
-    ):
+    # axis=None returns scalar bool, pandas-stubs typing issue
+    if isinstance(data, (pd.Series, pd.DataFrame)) and data.isna().any(axis=None):  # pyright: ignore[reportArgumentType,reportGeneralTypeIssues]
       raise ValueError("Data must not contain NaN values")
     return data
 
@@ -164,16 +178,14 @@ class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
       if not isinstance(index, pd.DatetimeIndex):
         raise ValueError("NoTimeGaps requires a DatetimeIndex")
 
-      if index.empty:
+      if len(index) <= 1:
         return data
 
-      expected_range = pd.date_range(start=index.min(), end=index.max(), freq=self.freq)  # type: ignore[union-attr]
-      if len(index) != len(expected_range):
-        raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
+      # Fully vectorized: numpy diff on underlying int64 nanoseconds
+      expected_ns = pd.Timedelta(pd.tseries.frequencies.to_offset(self.freq)).value  # type: ignore[arg-type]
+      actual_diffs_ns = np.diff(np.asarray(index.view(np.int64)))
 
-      # Check if all expected timestamps are present
-      # Using difference is faster than checking equality of sets or lists
-      if not expected_range.difference(index).empty:  # type: ignore[union-attr]
+      if not np.all(actual_diffs_ns == expected_ns):
         raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
 
     return data
@@ -195,12 +207,13 @@ class IsDtype(Validator[pd.Series | pd.DataFrame]):
       if data.dtype != self.dtype:
         raise ValueError(f"Data must be of type {self.dtype}, got {data.dtype}")
     elif isinstance(data, pd.DataFrame):
-      # Check all columns? Or just that the dataframe contains homogenous data?
-      # Usually IsDtype on a DataFrame implies all columns match.
-      for col in data.columns:  # type: ignore[var-annotated]
-        if data[col].dtype != self.dtype:  # type: ignore[union-attr]
-          msg = f"Column '{col}' must be of type {self.dtype}, got {data[col].dtype}"  # type: ignore[union-attr]
-          raise ValueError(msg)
+      # Vectorized dtype check: compare all column dtypes at once
+      mismatches = data.dtypes != self.dtype
+      if mismatches.any():
+        bad_cols = mismatches[mismatches].index.tolist()
+        bad_dtypes = data.dtypes[mismatches].tolist()
+        msg = f"Columns with wrong dtype (expected {self.dtype}): {dict(zip(bad_cols, bad_dtypes, strict=True))}"
+        raise ValueError(msg)
     return data
 
 

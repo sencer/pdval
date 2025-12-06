@@ -45,7 +45,7 @@ class TestIsDtypeDataFrame:
     """Test IsDtype with DataFrame where one column doesn't match."""
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]})
     validator = IsDtype[np.dtype("int64")]
-    with pytest.raises(ValueError, match="Column 'b' must be of type int64"):
+    with pytest.raises(ValueError, match="Columns with wrong dtype"):
       validator.validate(df)
 
 

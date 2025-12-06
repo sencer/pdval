@@ -788,7 +788,7 @@ class TestIsDtype:
 
     # Invalid
     data = pd.DataFrame({"a": [1.0, 2.0], "b": [1, 2]})
-    with pytest.raises(ValueError, match="Column 'b' must be of type"):
+    with pytest.raises(ValueError, match="Columns with wrong dtype"):
       validator.validate(data)
 
   def test_numpy_dtype(self):
