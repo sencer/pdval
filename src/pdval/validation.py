@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import (
   Annotated,
   Any,
+  Literal,
   ParamSpec,
   get_args,
   get_origin,
@@ -23,6 +24,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+from loguru import logger
 
 # Validated alias for Annotated
 Validated = Annotated
@@ -177,6 +179,9 @@ class HasColumns(Validator[pd.DataFrame]):
     self.columns = columns
 
   def __class_getitem__(cls, items: str | tuple[str, ...]) -> HasColumns:
+    if get_origin(items) is Literal:
+      items = get_args(items)
+
     if isinstance(items, str):
       items = (items,)
     return cls(list(items))
@@ -203,6 +208,8 @@ class Ge(Validator[pd.DataFrame]):
     self.col2 = col2
 
   def __class_getitem__(cls, items: tuple[str, str]) -> Ge:
+    if get_origin(items) is Literal:
+      items = get_args(items)  # type: ignore[assignment]
     return cls(items[0], items[1])
 
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -226,6 +233,8 @@ class Le(Validator[pd.DataFrame]):
     self.col2 = col2
 
   def __class_getitem__(cls, items: tuple[str, str]) -> Le:
+    if get_origin(items) is Literal:
+      items = get_args(items)  # type: ignore[assignment]
     return cls(items[0], items[1])
 
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -249,6 +258,8 @@ class Gt(Validator[pd.DataFrame]):
     self.col2 = col2
 
   def __class_getitem__(cls, items: tuple[str, str]) -> Gt:
+    if get_origin(items) is Literal:
+      items = get_args(items)  # type: ignore[assignment]
     return cls(items[0], items[1])
 
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -272,6 +283,8 @@ class Lt(Validator[pd.DataFrame]):
     self.col2 = col2
 
   def __class_getitem__(cls, items: tuple[str, str]) -> Lt:
+    if get_origin(items) is Literal:
+      items = get_args(items)  # type: ignore[assignment]
     return cls(items[0], items[1])
 
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
@@ -373,11 +386,26 @@ class HasColumn(Validator[pd.DataFrame]):
     self.validators = validators
 
   def __class_getitem__(cls, items: str | tuple[str, ...]) -> HasColumn:
+    if get_origin(items) is Literal:
+      args = get_args(items)
+      if len(args) == 1:
+        items = args[0]
+      else:
+        pass
+
     # Handle single column name
     if isinstance(items, str):
       return cls(items)
 
     # Handle tuple: (column, validators...)
+    # Check if first item is Literal
+    if isinstance(items, tuple) and len(items) > 0:
+      first = items[0]
+      if get_origin(first) is Literal:
+        args = get_args(first)
+        if args:
+          items = (args[0], *items[1:])
+
     column = items[0]
     validators = items[1:] if len(items) > 1 else ()
     return cls(column, *validators)  # type: ignore[arg-type]
@@ -418,15 +446,16 @@ def validated(  # noqa: UP047
 
 @overload
 def validated(
-  *, skip_validation_by_default: bool = False
-) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
+  *, skip_validation_by_default: bool = False, warn_only_by_default: bool = False
+) -> Callable[[Callable[P, R]], Callable[P, R | None]]: ...
 
 
 def validated(  # noqa: UP047
   func: Callable[P, R] | None = None,
   *,
   skip_validation_by_default: bool = False,
-) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
+  warn_only_by_default: bool = False,
+) -> Callable[P, R | None] | Callable[[Callable[P, R]], Callable[P, R | None]]:
   """Decorator to validate function arguments based on Annotated types.
 
   The decorator automatically adds a `skip_validation` parameter to the function.
@@ -436,6 +465,8 @@ def validated(  # noqa: UP047
   Args:
     func: The function to decorate.
     skip_validation_by_default: If True, `skip_validation` defaults to True.
+    warn_only_by_default: If True, `warn_only` defaults to True. When `warn_only` is
+      True, validation failures log an error and return None instead of raising.
 
   Returns:
     The decorated function with automatic validation support.
@@ -466,7 +497,7 @@ def validated(  # noqa: UP047
     >>> result = fast_process(valid_data, skip_validation=False)
   """
 
-  def decorator(func: Callable[P, R]) -> Callable[P, R]:
+  def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
     # Inspect function signature
     sig = inspect.signature(func)
     type_hints = typing.get_type_hints(func, include_extras=True)
@@ -502,21 +533,30 @@ def validated(  # noqa: UP047
             arg_validators[name] = validators
 
     @functools.wraps(func)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
       # Check for skip_validation in kwargs
       skip = kwargs.pop("skip_validation", skip_validation_by_default)
       if skip:
         return func(*args, **kwargs)
+
+      # Check for warn_only in kwargs
+      warn_only = kwargs.pop("warn_only", warn_only_by_default)
 
       # Bind arguments
       bound_args = sig.bind(*args, **kwargs)
       bound_args.apply_defaults()
 
       # Validate arguments
-      for name, value in bound_args.arguments.items():
-        if name in arg_validators:
-          for v in arg_validators[name]:
-            v.validate(value)
+      try:
+        for name, value in bound_args.arguments.items():
+          if name in arg_validators:
+            for v in arg_validators[name]:
+              v.validate(value)
+      except Exception as e:
+        if warn_only:
+          logger.error(f"Validation failed for {func.__name__}: {e}")
+          return None
+        raise e
 
       return func(*args, **kwargs)
 
