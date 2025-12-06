@@ -36,13 +36,20 @@ uv add pdval
 
 ```python
 import pandas as pd
-from pdval import validated, Validated, Finite, NonNaN
+from pdval import validated, Validated, Finite
 
 @validated
 def calculate_returns(
-    prices: Validated[pd.Series, Finite, NonNaN],
+    prices: Validated[pd.Series, Finite],
 ) -> pd.Series:
-    """Calculate percentage returns from prices."""
+    """Calculate percentage returns from prices.
+    
+    By default, data is checked for:
+    - Not empty (NonEmpty auto-applied)
+    - No NaN values (NonNaN auto-applied)
+    
+    Finite adds: no infinite values allowed.
+    """
     return prices.pct_change()
 
 # Valid data passes through
@@ -60,7 +67,8 @@ calculate_returns(bad_prices)
 
 ### Value Validators (Series/Index)
 
-- **`Finite`** - Ensures no Inf or NaN values
+- **`Finite`** - Ensures no Inf values (works with `Nullable` marker)
+- **`StrictFinite`** - Ensures no Inf AND no NaN values (ignores `Nullable`)
 - **`NonNaN`** - Ensures no NaN values (allows Inf)
 - **`NonNegative`** - Ensures all values >= 0
 - **`Positive`** - Ensures all values > 0
@@ -70,6 +78,16 @@ calculate_returns(bad_prices)
 - **`MonoDown`** - Ensures values are monotonically decreasing
 - **`Datetime`** - Ensures data is a DatetimeIndex
 - **`OneOf["a", "b", "c"]`** - Ensures values are in allowed set (categorical)
+
+
+### Shape Validators
+
+- **`Shape[10, 5]`** - Exact shape (10 rows, 5 columns)
+- **`Shape[Ge[10], Any]`** - At least 10 rows, any columns
+- **`Shape[Any, Le[5]]`** - Any rows, at most 5 columns
+- **`Shape[Gt[0], Lt[100]]`** - More than 0 rows, less than 100 columns
+- **`Shape[100]`** - For Series: exactly 100 rows
+
 
 
 ### Index Wrapper
@@ -270,6 +288,46 @@ def track_drawdown(
 ) -> pd.Series:
     """Track drawdown - equity must be monotonically decreasing."""
     return (equity / equity.iloc[0]) - 1
+```
+
+### Shape Validation
+
+```python
+from typing import Any
+from pdval import validated, Validated, Shape, Ge, Le
+import pandas as pd
+
+@validated
+def process_batch(
+    data: Validated[pd.DataFrame, Shape[Ge[10], Any]],
+) -> pd.DataFrame:
+    """Process data batch - must have at least 10 rows."""
+    return data.describe()
+
+# Valid data (10+ rows)
+df = pd.DataFrame({"a": range(20), "b": range(20)})
+result = process_batch(df)
+
+# Too few rows raises error
+small_df = pd.DataFrame({"a": [1, 2, 3]})
+# Raises: ValueError: DataFrame must have >= 10 rows, got 3
+process_batch(small_df)
+
+# Constrain both dimensions
+@validated
+def process_matrix(
+    data: Validated[pd.DataFrame, Shape[Ge[5], Le[10]]],
+) -> pd.DataFrame:
+    """Process matrix - 5+ rows, max 10 columns."""
+    return data
+
+# Exact shape for Series
+@validated
+def process_vector(
+    data: Validated[pd.Series, Shape[100]],
+) -> pd.Series:
+    """Process vector - must have exactly 100 elements."""
+    return data
 ```
 
 ### Column-Specific Validation with HasColumn

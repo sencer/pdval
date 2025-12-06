@@ -74,9 +74,9 @@ class TestValidatedDecorator:
     result = process(valid_data)
     assert result == 6.0
 
-    # Fails Finite check
+    # Fails Finite check (Inf)
     with pytest.raises(ValueError, match="must be finite"):
-      process(pd.Series([1.0, np.nan, 3.0]))
+      process(pd.Series([1.0, np.inf, 3.0]))
 
     # Fails Positive check
     with pytest.raises(ValueError, match="must be positive"):
@@ -178,7 +178,7 @@ class TestValidatedDecorator:
 
     # Second argument invalid
     with pytest.raises(ValueError, match="must be finite"):
-      combine(valid1, pd.Series([3.0, np.nan]))
+      combine(valid1, pd.Series([3.0, np.inf]))
 
   def test_non_validated_arguments_ignored(self):
     """Test non-validated arguments are not validated."""
@@ -269,7 +269,7 @@ class TestComplexValidations:
     @validated
     @validated
     def calculate_returns(prices: Validated[pd.Series, Finite, Positive, Nullable]):
-      return prices.pct_change()
+      return prices.pct_change(fill_method=None)
 
     # Valid prices
     valid_prices = pd.Series([100.0, 102.0, 101.0, 103.0])
@@ -280,9 +280,9 @@ class TestComplexValidations:
     with pytest.raises(ValueError, match="must be positive"):
       calculate_returns(pd.Series([100.0, 0.0, 101.0]))
 
-    # NaN price fails Finite check
+    # Inf price fails Finite check (Finite now only rejects Inf, not NaN)
     with pytest.raises(ValueError, match="must be finite"):
-      calculate_returns(pd.Series([100.0, np.nan, 101.0]))
+      calculate_returns(pd.Series([100.0, np.inf, 101.0]))
 
 
 class TestEdgeCases:
