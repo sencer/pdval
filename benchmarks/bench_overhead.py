@@ -1,5 +1,5 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
-# pyright: reportCallIssue=false
+# pyright: reportCallIssue=false, reportArgumentType=false
 import timeit
 
 import numpy as np
