@@ -41,17 +41,14 @@ def decorated_index(
 
 
 def run_benchmark(
-  func: Any,  # noqa: ANN401
+  func: Any,
   data: pd.Series,
   skip_val: bool | None,
   iterations: int,
 ) -> float:
   if skip_val is None:
     return timeit.timeit(lambda: func(data), number=iterations)
-  else:
-    return timeit.timeit(
-      lambda: func(data, skip_validation=skip_val), number=iterations
-    )
+  return timeit.timeit(lambda: func(data, skip_validation=skip_val), number=iterations)
 
 
 def main() -> None:
@@ -75,11 +72,11 @@ def main() -> None:
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
     f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
-    f"(+{overhead_skip:6.2f}µs/call)"
+    f"(+{overhead_skip:6.2f}us/call)"
   )
   print(
     f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
-    f"(+{overhead_validate:6.2f}µs/call)"
+    f"(+{overhead_validate:6.2f}us/call)"
   )
   print()
 
@@ -97,11 +94,11 @@ def main() -> None:
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
     f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
-    f"(+{overhead_skip:6.2f}µs/call)"
+    f"(+{overhead_skip:6.2f}us/call)"
   )
   print(
     f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
-    f"(+{overhead_validate:6.2f}µs/call)"
+    f"(+{overhead_validate:6.2f}us/call)"
   )
   print()
 
@@ -119,11 +116,11 @@ def main() -> None:
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
     f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
-    f"(+{overhead_skip:6.2f}µs/call)"
+    f"(+{overhead_skip:6.2f}us/call)"
   )
   print(
     f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
-    f"(+{overhead_validate:6.2f}µs/call)"
+    f"(+{overhead_validate:6.2f}us/call)"
   )
   print()
 
@@ -141,11 +138,11 @@ def main() -> None:
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
     f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
-    f"(+{overhead_skip:6.2f}µs/call)"
+    f"(+{overhead_skip:6.2f}us/call)"
   )
   print(
     f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
-    f"(+{overhead_validate:6.2f}µs/call)"
+    f"(+{overhead_validate:6.2f}us/call)"
   )
   print()
 
@@ -153,7 +150,7 @@ def main() -> None:
   print("=" * 70)
   print("Summary")
   print("=" * 70)
-  print("• skip_validation=True adds ~0.5µs overhead (essentially zero)")
+  print("• skip_validation=True adds ~0.5us overhead (essentially zero)")
   print("• skip_validation=False (default) overhead scales with:")
   print("  - Number of validators")
   print("  - Data size")

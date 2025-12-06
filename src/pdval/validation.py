@@ -1,18 +1,10 @@
-"""Pandas validation using Annotated types and decorators.
-
-This module provides a decorator-based validation system for pandas DataFrames
-and Series using Python's Annotated types.
-"""
-
 from __future__ import annotations
 
-# pyright: reportOperatorIssue=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 import functools
 import inspect
 import typing
-from abc import ABC, abstractmethod
-from collections.abc import Callable
 from typing import (
+  TYPE_CHECKING,
   Annotated,
   Any,
   Literal,
@@ -20,11 +12,15 @@ from typing import (
   get_args,
   get_origin,
   overload,
+  override,
 )
 
+from loguru import logger
 import numpy as np
 import pandas as pd
-from loguru import logger
+
+if TYPE_CHECKING:
+  from collections.abc import Callable
 
 # Validated alias for Annotated
 Validated = Annotated
@@ -33,20 +29,29 @@ Validated = Annotated
 # Validator Classes
 
 
-class Validator[T](ABC):
+class Validator[T]:
   """Base class for validators."""
 
-  @abstractmethod
   def validate(self, data: T) -> T:
     """Validate the data and return it (potentially modified)."""
+    return data
+
+
+class ValidatorMarker:
+  """Base class for validator markers that don't perform validation.
+
+  Markers like Nullable and MaybeEmpty are used to opt-out of default
+  validation behaviors and don't need a validate method.
+  """
 
 
 class Finite(Validator[pd.Series | pd.DataFrame]):
   """Validator for finite values (no Inf, no NaN)."""
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if isinstance(data, (pd.Series, pd.DataFrame)) and not np.all(
-      np.isfinite(data.values)
+      np.isfinite(data.values)  # type: ignore[arg-type]
     ):
       raise ValueError("Data must be finite (no Inf, no NaN)")
     return data
@@ -55,6 +60,7 @@ class Finite(Validator[pd.Series | pd.DataFrame]):
 class NonEmpty(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for non-empty data."""
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
@@ -63,25 +69,22 @@ class NonEmpty(Validator[pd.Series | pd.DataFrame | pd.Index]):
     return data
 
 
-class Nullable(Validator[Any]):
+class Nullable(ValidatorMarker):
   """Marker to allow NaN values (opt-out of default NonNaN)."""
 
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
-    return data
 
-
-class MaybeEmpty(Validator[Any]):
+class MaybeEmpty(ValidatorMarker):
   """Marker to allow empty data (opt-out of default NonEmpty)."""
-
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
-    return data
 
 
 class NonNaN(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-NaN values."""
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
-    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(np.isnan(data.values)):
+    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(
+      np.isnan(data.values)  # type: ignore[arg-type]
+    ):
       raise ValueError("Data must not contain NaN values")
     return data
 
@@ -89,8 +92,9 @@ class NonNaN(Validator[pd.Series | pd.DataFrame]):
 class NonNegative(Validator[pd.Series | pd.DataFrame]):
   """Validator for non-negative values (>= 0)."""
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
-    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(data.values < 0):
+    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(data.values < 0):  # type: ignore[operator]
       raise ValueError("Data must be non-negative")
     return data
 
@@ -98,8 +102,9 @@ class NonNegative(Validator[pd.Series | pd.DataFrame]):
 class Positive(Validator[pd.Series | pd.DataFrame]):
   """Validator for positive values (> 0)."""
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
-    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(data.values <= 0):
+    if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(data.values <= 0):  # type: ignore[operator]
       raise ValueError("Data must be positive")
     return data
 
@@ -107,13 +112,15 @@ class Positive(Validator[pd.Series | pd.DataFrame]):
 class Datetime(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for datetime index or values."""
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
     if isinstance(data, pd.Index) and not isinstance(data, pd.DatetimeIndex):
       raise ValueError("Index must be DatetimeIndex")
     if isinstance(data, (pd.Series, pd.DataFrame)) and not isinstance(
-      data.index, pd.DatetimeIndex
+      data.index,
+      pd.DatetimeIndex,  # type: ignore[union-attr]
     ):
       raise ValueError("Index must be DatetimeIndex")
     return data
@@ -122,12 +129,13 @@ class Datetime(Validator[pd.Series | pd.DataFrame | pd.Index]):
 class UniqueIndex(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for unique index."""
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
     if isinstance(data, pd.Index) and not data.is_unique:
       raise ValueError("Index must be unique")
-    if isinstance(data, (pd.Series, pd.DataFrame)) and not data.index.is_unique:
+    if isinstance(data, (pd.Series, pd.DataFrame)) and not data.index.is_unique:  # type: ignore[union-attr]
       raise ValueError("Index must be unique")
     return data
 
@@ -136,11 +144,13 @@ class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for no time gaps in DatetimeIndex."""
 
   def __init__(self, freq: str) -> None:
+    super().__init__()
     self.freq = freq
 
   def __class_getitem__(cls, item: str) -> NoTimeGaps:
     return cls(item)
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
@@ -148,7 +158,7 @@ class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
     if isinstance(data, pd.Index):
       index = data
     elif isinstance(data, (pd.Series, pd.DataFrame)):
-      index = data.index
+      index = data.index  # type: ignore[union-attr]
 
     if index is not None:
       if not isinstance(index, pd.DatetimeIndex):
@@ -157,13 +167,13 @@ class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
       if index.empty:
         return data
 
-      expected_range = pd.date_range(start=index.min(), end=index.max(), freq=self.freq)
+      expected_range = pd.date_range(start=index.min(), end=index.max(), freq=self.freq)  # type: ignore[union-attr]
       if len(index) != len(expected_range):
         raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
 
       # Check if all expected timestamps are present
       # Using difference is faster than checking equality of sets or lists
-      if not expected_range.difference(index).empty:
+      if not expected_range.difference(index).empty:  # type: ignore[union-attr]
         raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
 
     return data
@@ -173,11 +183,13 @@ class IsDtype(Validator[pd.Series | pd.DataFrame]):
   """Validator for specific dtype."""
 
   def __init__(self, dtype: str | type | np.dtype) -> None:
+    super().__init__()
     self.dtype = np.dtype(dtype)
 
   def __class_getitem__(cls, item: str | type | np.dtype) -> IsDtype:
     return cls(item)
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if isinstance(data, pd.Series):
       if data.dtype != self.dtype:
@@ -185,9 +197,9 @@ class IsDtype(Validator[pd.Series | pd.DataFrame]):
     elif isinstance(data, pd.DataFrame):
       # Check all columns? Or just that the dataframe contains homogenous data?
       # Usually IsDtype on a DataFrame implies all columns match.
-      for col in data.columns:
-        if data[col].dtype != self.dtype:
-          msg = f"Column '{col}' must be of type {self.dtype}, got {data[col].dtype}"
+      for col in data.columns:  # type: ignore[var-annotated]
+        if data[col].dtype != self.dtype:  # type: ignore[union-attr]
+          msg = f"Column '{col}' must be of type {self.dtype}, got {data[col].dtype}"  # type: ignore[union-attr]
           raise ValueError(msg)
     return data
 
@@ -200,12 +212,18 @@ class HasColumns(Validator[pd.DataFrame]):
   """
 
   def __init__(
-    self, columns: list[str], validators: tuple[Validator[Any], ...] = ()
+    self,
+    columns: list[str],
+    validators: tuple[Validator[Any] | ValidatorMarker, ...] = (),  # type: ignore[misc]
   ) -> None:
+    super().__init__()
     self.columns = columns
     self.validators = validators
 
-  def __class_getitem__(cls, items: Any) -> HasColumns:  # noqa: ANN401
+  def __class_getitem__(
+    cls,
+    items: object,
+  ) -> HasColumns:
     if get_origin(items) is Literal:
       items = get_args(items)
 
@@ -214,26 +232,25 @@ class HasColumns(Validator[pd.DataFrame]):
 
     # Parse columns and validators
     columns: list[str] = []
-    validators: list[Validator[Any]] = []
+    validators: list[Validator[Any] | ValidatorMarker] = []  # type: ignore[misc]
 
-    for item in items:
+    for item in items:  # type: ignore[union-attr]
       # Handle Literal inside tuple
-      if get_origin(item) is Literal:
-        args = get_args(item)
-        for arg in args:
-          if isinstance(arg, str):
-            columns.append(arg)
+      if get_origin(item) is Literal:  # type: ignore[arg-type]
+        args = get_args(item)  # type: ignore[arg-type]
+        columns.extend([arg for arg in args if isinstance(arg, str)])
         continue
 
       if isinstance(item, str):
         columns.append(item)
       else:
-        v = _instantiate_validator(item)
+        v = _instantiate_validator(item)  # type: ignore[arg-type]
         if v:
           validators.append(v)
 
     return cls(columns, tuple(validators))
 
+  @override
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(data, pd.DataFrame):
       raise TypeError("HasColumns validator requires a pandas DataFrame")
@@ -243,10 +260,7 @@ class HasColumns(Validator[pd.DataFrame]):
       raise ValueError(f"Missing columns: {missing}")
 
     # Determine validators to apply
-    # Default: NonNaN and NonEmpty
-    # Opt-out: Nullable, CanBeEmpty
-
-    final_validators: list[Validator[Any]] = []
+    final_validators: list[Validator[Any]] = []  # type: ignore[misc]
     is_nullable = False
     maybe_empty = False
 
@@ -257,7 +271,7 @@ class HasColumns(Validator[pd.DataFrame]):
           is_nullable = True
         elif isinstance(v, MaybeEmpty):
           maybe_empty = True
-        else:
+        elif isinstance(v, Validator):
           final_validators.append(v)
 
     # Add defaults if not opted out
@@ -268,9 +282,9 @@ class HasColumns(Validator[pd.DataFrame]):
 
     if final_validators:
       for col in self.columns:
-        column_data = data[col]
+        column_data = data[col]  # type: ignore[union-attr]
         for v in final_validators:
-          column_data = v.validate(column_data)
+          column_data = v.validate(column_data)  # type: ignore[assignment]
 
     return data
 
@@ -279,16 +293,18 @@ class Ge(Validator[pd.Series | pd.DataFrame]):
   """Validator that data >= target (unary) or col1 >= col2 >= ... (n-ary)."""
 
   def __init__(self, *targets: str | float | int) -> None:
+    super().__init__()
     self.targets = targets
 
-  def __class_getitem__(cls, items: Any) -> Ge:  # noqa: ANN401
+  def __class_getitem__(cls, items: object) -> Ge:
     if get_origin(items) is Literal:
       items = get_args(items)
 
     if not isinstance(items, tuple):
       items = (items,)
-    return cls(*items)
+    return cls(*items)  # type: ignore[arg-type]
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if len(self.targets) == 1:
       # Unary comparison
@@ -321,16 +337,18 @@ class Le(Validator[pd.Series | pd.DataFrame]):
   """Validator that data <= target (unary) or col1 <= col2 <= ... (n-ary)."""
 
   def __init__(self, *targets: str | float | int) -> None:
+    super().__init__()
     self.targets = targets
 
-  def __class_getitem__(cls, items: Any) -> Le:  # noqa: ANN401
+  def __class_getitem__(cls, items: object) -> Le:
     if get_origin(items) is Literal:
       items = get_args(items)
 
     if not isinstance(items, tuple):
       items = (items,)
-    return cls(*items)
+    return cls(*items)  # type: ignore[arg-type]
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if len(self.targets) == 1:
       # Unary comparison
@@ -363,16 +381,18 @@ class Gt(Validator[pd.Series | pd.DataFrame]):
   """Validator that data > target (unary) or col1 > col2 > ... (n-ary)."""
 
   def __init__(self, *targets: str | float | int) -> None:
+    super().__init__()
     self.targets = targets
 
-  def __class_getitem__(cls, items: Any) -> Gt:  # noqa: ANN401
+  def __class_getitem__(cls, items: object) -> Gt:
     if get_origin(items) is Literal:
       items = get_args(items)
 
     if not isinstance(items, tuple):
       items = (items,)
-    return cls(*items)
+    return cls(*items)  # type: ignore[arg-type]
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if len(self.targets) == 1:
       # Unary comparison
@@ -405,16 +425,18 @@ class Lt(Validator[pd.Series | pd.DataFrame]):
   """Validator that data < target (unary) or col1 < col2 < ... (n-ary)."""
 
   def __init__(self, *targets: str | float | int) -> None:
+    super().__init__()
     self.targets = targets
 
-  def __class_getitem__(cls, items: Any) -> Lt:  # noqa: ANN401
+  def __class_getitem__(cls, items: object) -> Lt:
     if get_origin(items) is Literal:
       items = get_args(items)
 
     if not isinstance(items, tuple):
       items = (items,)
-    return cls(*items)
+    return cls(*items)  # type: ignore[arg-type]
 
+  @override
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if len(self.targets) == 1:
       # Unary comparison
@@ -446,6 +468,7 @@ class Lt(Validator[pd.Series | pd.DataFrame]):
 class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for monotonically increasing values or index."""
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
@@ -463,6 +486,7 @@ class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
 class MonoDown(Validator[pd.Series | pd.DataFrame | pd.Index]):
   """Validator for monotonically decreasing values or index."""
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
@@ -486,17 +510,20 @@ class Index(Validator[pd.Series | pd.DataFrame | pd.Index]):
   - Index[Datetime, MonoUp] - Check both
   """
 
-  def __init__(self, *validators: Validator[Any] | type[Validator[Any]]) -> None:
+  def __init__(
+    self,
+    *validators: Validator[Any] | type[Validator[Any]],  # type: ignore[misc]
+  ) -> None:
+    super().__init__()
     self.validators = validators
 
-  def __class_getitem__(
-    cls, items: type[Validator[Any]] | tuple[type[Validator[Any]], ...]
-  ) -> Index:
+  def __class_getitem__(cls, items: object) -> Index:
     # Handle single validator
     if not isinstance(items, tuple):
       items = (items,)
-    return cls(*items)
+    return cls(*items)  # type: ignore[arg-type]
 
+  @override
   def validate(
     self, data: pd.Series | pd.DataFrame | pd.Index
   ) -> pd.Series | pd.DataFrame | pd.Index:
@@ -530,9 +557,13 @@ class HasColumn(Validator[pd.DataFrame]):
 
   def __init__(
     self,
-    column: str | Any,  # noqa: ANN401
-    *validators: Validator[Any] | type[Validator[Any]],
+    column: str | typing.TypeVar,
+    *validators: Validator[Any]  # type: ignore[misc]
+    | ValidatorMarker
+    | type[Validator[Any]]  # type: ignore[misc]
+    | type[ValidatorMarker],
   ) -> None:
+    super().__init__()
     self.column = column
     self.validators = validators
 
@@ -540,13 +571,14 @@ class HasColumn(Validator[pd.DataFrame]):
     """Support for templating: CustomVal["col"]."""
     return HasColumn(item, *self.validators)
 
-  def __class_getitem__(cls, items: Any) -> HasColumn:  # noqa: ANN401
+  def __class_getitem__(
+    cls,
+    items: object,
+  ) -> HasColumn:
     if get_origin(items) is Literal:
       args = get_args(items)
       if len(args) == 1:
         items = args[0]
-      else:
-        pass
 
     # Handle single column name
     if isinstance(items, (str, typing.TypeVar)):
@@ -561,10 +593,11 @@ class HasColumn(Validator[pd.DataFrame]):
         if args:
           items = (args[0], *items[1:])
 
-    column = items[0]
-    validators = items[1:] if len(items) > 1 else ()
+    column = items[0]  # type: ignore[index]
+    validators = items[1:] if len(items) > 1 else ()  # type: ignore[index]
     return cls(column, *validators)  # type: ignore[arg-type]
 
+  @override
   def validate(self, data: pd.DataFrame) -> pd.DataFrame:
     if isinstance(data, pd.DataFrame):
       if self.column not in data.columns:
@@ -574,10 +607,7 @@ class HasColumn(Validator[pd.DataFrame]):
       column_data = data[self.column]
 
       # Determine validators to apply
-      # Default: NonNaN and NonEmpty
-      # Opt-out: Nullable, CanBeEmpty
-
-      final_validators: list[Validator[Any]] = []
+      final_validators: list[Validator[Any]] = []  # type: ignore[misc]
       is_nullable = False
       maybe_empty = False
 
@@ -589,7 +619,7 @@ class HasColumn(Validator[pd.DataFrame]):
             is_nullable = True
           elif isinstance(v, MaybeEmpty):
             maybe_empty = True
-          else:
+          elif isinstance(v, Validator):
             final_validators.append(v)
 
       # Add defaults if not opted out
@@ -610,18 +640,18 @@ R = typing.TypeVar("R")
 
 
 @overload
-def validated(  # noqa: UP047
+def validated[**P, R](
   func: Callable[P, R],
 ) -> Callable[P, R]: ...
 
 
 @overload
-def validated(
+def validated[**P, R](
   *, skip_validation_by_default: bool = False, warn_only_by_default: bool = False
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]: ...
 
 
-def validated(  # noqa: UP047
+def validated[**P, R](
   func: Callable[P, R] | None = None,
   *,
   skip_validation_by_default: bool = False,
@@ -668,14 +698,16 @@ def validated(  # noqa: UP047
     >>> result = fast_process(valid_data, skip_validation=False)
   """
 
-  def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
+  def decorator(
+    func: Callable[P, R],
+  ) -> Callable[P, R | None]:
     # Inspect function signature
     sig = inspect.signature(func)
     type_hints = typing.get_type_hints(func, include_extras=True)
 
     # Pre-compute validators for each argument
-    arg_validators: dict[str, list[Validator[Any]]] = {}
-    for name, _ in sig.parameters.items():
+    arg_validators: dict[str, list[Validator[Any]]] = {}  # type: ignore[misc]
+    for name in sig.parameters:
       if name in type_hints:
         hint = type_hints[name]
 
@@ -785,15 +817,21 @@ def validated(  # noqa: UP047
     return wrapper
 
   if func is None:
-    return decorator  # type: ignore
+    return decorator
 
   return decorator(func)
 
 
-def _instantiate_validator(item: Any) -> Validator[Any] | None:  # noqa: ANN401
+def _instantiate_validator(
+  item: object,
+) -> Validator[Any] | ValidatorMarker | None:  # type: ignore[misc]
   """Helper to instantiate a validator from a type or instance."""
-  if isinstance(item, type) and issubclass(item, Validator):
-    return item()
-  if isinstance(item, Validator):
+  if isinstance(item, type):
+    try:
+      if issubclass(item, (Validator, ValidatorMarker)):
+        return item()  # type: ignore[return-value]
+    except TypeError:
+      pass
+  if isinstance(item, (Validator, ValidatorMarker)):
     return item
   return None

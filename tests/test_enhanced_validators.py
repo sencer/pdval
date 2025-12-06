@@ -61,34 +61,41 @@ class TestChainedComparisons:
 
   def test_ge_chained(self):
     """Test Ge["high", "close", "low"]."""
-    # high >= close >= low
-    data = pd.DataFrame(
-      {"high": [100, 200, 300], "close": [90, 190, 290], "low": [80, 180, 280]}
-    )
+    data = pd.DataFrame({
+      "high": [100, 200, 300],
+      "close": [90, 190, 290],
+      "low": [80, 180, 280],
+    })
     validator = Ge["high", "close", "low"]
     result = validator.validate(data)
     assert result.equals(data)
 
     # Fail high >= close
-    invalid_data = pd.DataFrame(
-      {"high": [80, 200, 300], "close": [90, 190, 290], "low": [80, 180, 280]}
-    )
+    invalid_data = pd.DataFrame({
+      "high": [80, 200, 300],
+      "close": [90, 190, 290],
+      "low": [80, 180, 280],
+    })
     with pytest.raises(ValueError, match="high must be >= close"):
       validator.validate(invalid_data)
 
     # Fail close >= low
-    invalid_data_2 = pd.DataFrame(
-      {"high": [100, 200, 300], "close": [90, 190, 290], "low": [95, 180, 280]}
-    )
+    invalid_data_2 = pd.DataFrame({
+      "high": [100, 200, 300],
+      "close": [90, 190, 290],
+      "low": [95, 180, 280],
+    })
     with pytest.raises(ValueError, match="close must be >= low"):
       validator.validate(invalid_data_2)
 
   def test_lt_chained(self):
     """Test Lt["low", "close", "high"]."""
     # low < close < high
-    data = pd.DataFrame(
-      {"low": [80, 180, 280], "close": [90, 190, 290], "high": [100, 200, 300]}
-    )
+    data = pd.DataFrame({
+      "low": [80, 180, 280],
+      "close": [90, 190, 290],
+      "high": [100, 200, 300],
+    })
     validator = Lt["low", "close", "high"]
     result = validator.validate(data)
     assert result.equals(data)
@@ -123,32 +130,32 @@ class TestHasColumnTemplating:
   def test_templating(self):
     """Test CustomVal[T] = HasColumn[T, ...]."""
     T = TypeVar("T")
-    CustomVal = HasColumn[T, Positive]
+    custom_val = HasColumn[T, Positive]
 
     # Instantiate for specific column
-    ValidatorA = CustomVal["a"]
+    validator_a = custom_val["a"]
 
-    assert ValidatorA.column == "a"
-    assert len(ValidatorA.validators) == 1
-    v = ValidatorA.validators[0]
+    assert validator_a.column == "a"
+    assert len(validator_a.validators) == 1
+    v = validator_a.validators[0]
     # HasColumn stores validators as passed (can be class or instance)
     assert v is Positive or isinstance(v, Positive)
 
     data = pd.DataFrame({"a": [1, 2, 3]})
-    result = ValidatorA.validate(data)
+    result = validator_a.validate(data)
     assert result.equals(data)
 
     invalid_data = pd.DataFrame({"a": [-1, 2, 3]})
     with pytest.raises(ValueError, match="must be positive"):
-      ValidatorA.validate(invalid_data)
+      validator_a.validate(invalid_data)
 
   def test_templating_decorator(self):
     """Test templating usage in @validated."""
     T = TypeVar("T")
-    PositiveCol = HasColumn[T, Positive]
+    positive_col = HasColumn[T, Positive]
 
     @validated
-    def process(data: Validated[pd.DataFrame, PositiveCol["price"]]):  # noqa: F821
+    def process(data: Validated[pd.DataFrame, positive_col["price"]]):  # noqa: F821
       return data["price"].sum()
 
     valid_data = pd.DataFrame({"price": [10, 20]})
