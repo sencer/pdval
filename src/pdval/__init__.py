@@ -1,6 +1,6 @@
 """pdval - Pandas validation using Annotated types and decorators."""
 
-__version__ = "0.1.11"
+__version__ = "0.1.12"
 
 from pdval.validation import (
   Datetime,
