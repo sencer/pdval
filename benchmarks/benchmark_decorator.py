@@ -1,4 +1,6 @@
 """Detailed benchmark of @validated decorator overhead."""
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false
+# pyright: reportCallIssue=false
 
 import timeit
 from typing import Any
@@ -38,7 +40,12 @@ def decorated_index(
   return data.sum()
 
 
-def run_benchmark(func: Any, data: pd.Series, skip_val: bool | None, iterations: int):
+def run_benchmark(
+  func: Any,
+  data: pd.Series,
+  skip_val: bool | None,
+  iterations: int,
+) -> float:
   if skip_val is None:
     return timeit.timeit(lambda: func(data), number=iterations)
   else:
@@ -47,7 +54,7 @@ def run_benchmark(func: Any, data: pd.Series, skip_val: bool | None, iterations:
     )
 
 
-def main():
+def main() -> None:
   iterations = 10000
   print("=" * 70)
   print("@validated Decorator Performance Benchmark")
@@ -67,10 +74,12 @@ def main():
 
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
-    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)"
+    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
+    f"(+{overhead_skip:6.2f}µs/call)"
   )
   print(
-    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)"
+    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
+    f"(+{overhead_validate:6.2f}µs/call)"
   )
   print()
 
@@ -87,10 +96,12 @@ def main():
 
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
-    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)"
+    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
+    f"(+{overhead_skip:6.2f}µs/call)"
   )
   print(
-    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)"
+    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
+    f"(+{overhead_validate:6.2f}µs/call)"
   )
   print()
 
@@ -107,10 +118,12 @@ def main():
 
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
-    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)"
+    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
+    f"(+{overhead_skip:6.2f}µs/call)"
   )
   print(
-    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)"
+    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
+    f"(+{overhead_validate:6.2f}µs/call)"
   )
   print()
 
@@ -127,10 +140,12 @@ def main():
 
   print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
   print(
-    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)"
+    f"Decorated (skip_validation=True):   {t_skip:8.4f}s  "
+    f"(+{overhead_skip:6.2f}µs/call)"
   )
   print(
-    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)"
+    f"Decorated (skip_validation=False):  {t_validate:8.4f}s  "
+    f"(+{overhead_validate:6.2f}µs/call)"
   )
   print()
 
