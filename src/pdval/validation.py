@@ -584,7 +584,6 @@ class HasColumn(Validator[pd.DataFrame]):
       # Check for markers in self.validators
       for validator_item in self.validators:
         v = _instantiate_validator(validator_item)
-        print(f"DEBUG HasColumn: item={validator_item}, v={v}, type(v)={type(v)}")
         if v:
           if isinstance(v, Nullable):
             is_nullable = True
@@ -676,10 +675,8 @@ def validated(  # noqa: UP047
 
     # Pre-compute validators for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}
-    print(f"DEBUG: type_hints keys: {list(type_hints.keys())}")
     for name, _ in sig.parameters.items():
       if name in type_hints:
-        print(f"DEBUG: Checking {name}")
         hint = type_hints[name]
 
         # Handle Optional/Union types
