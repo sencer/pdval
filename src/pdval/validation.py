@@ -78,26 +78,16 @@ class Positive(Validator):
     return data
 
 
-class DateTimeIndexed(Validator):
-  """Validator for DateTimeIndex."""
+class Datetime(Validator):
+  """Validator for datetime index or values."""
 
   def validate(self, data: Any) -> Any:  # noqa: ANN401
+    if isinstance(data, pd.Index) and not isinstance(data, pd.DatetimeIndex):
+      raise ValueError("Index must be DatetimeIndex")
     if isinstance(data, (pd.Series, pd.DataFrame)) and not isinstance(
       data.index, pd.DatetimeIndex
     ):
       raise ValueError("Index must be DatetimeIndex")
-    return data
-
-
-class MonotonicIndex(Validator):
-  """Validator for monotonic increasing index."""
-
-  def validate(self, data: Any) -> Any:  # noqa: ANN401
-    if (
-      isinstance(data, (pd.Series, pd.DataFrame))
-      and not data.index.is_monotonic_increasing
-    ):
-      raise ValueError("Index must be monotonic increasing")
     return data
 
 
@@ -205,9 +195,11 @@ class Lt(Validator):
 
 
 class MonoUp(Validator):
-  """Validator for monotonically increasing values."""
+  """Validator for monotonically increasing values or index."""
 
   def validate(self, data: Any) -> Any:  # noqa: ANN401
+    if isinstance(data, pd.Index) and not data.is_monotonic_increasing:
+      raise ValueError("Index must be monotonically increasing")
     if isinstance(data, pd.Series) and not data.is_monotonic_increasing:
       raise ValueError("Values must be monotonically increasing")
     if isinstance(data, pd.DataFrame):
@@ -218,15 +210,57 @@ class MonoUp(Validator):
 
 
 class MonoDown(Validator):
-  """Validator for monotonically decreasing values."""
+  """Validator for monotonically decreasing values or index."""
 
   def validate(self, data: Any) -> Any:  # noqa: ANN401
+    if isinstance(data, pd.Index) and not data.is_monotonic_decreasing:
+      raise ValueError("Index must be monotonically decreasing")
     if isinstance(data, pd.Series) and not data.is_monotonic_decreasing:
       raise ValueError("Values must be monotonically decreasing")
     if isinstance(data, pd.DataFrame):
       for col in data.columns:
         if not data[col].is_monotonic_decreasing:
           raise ValueError(f"Column '{col}' values must be monotonically decreasing")
+    return data
+
+
+class Index(Validator):
+  """Validator for index properties.
+
+  Can be used to apply validators to the index:
+  - Index[Datetime] - Check index is DatetimeIndex
+  - Index[MonoUp] - Check index is monotonically increasing
+  - Index[Datetime, MonoUp] - Check both
+  """
+
+  def __init__(self, *validators: Validator | type[Validator]) -> None:
+    self.validators = validators
+
+  def __class_getitem__(
+    cls, items: type[Validator] | tuple[type[Validator], ...]
+  ) -> Index:
+    # Handle single validator
+    if not isinstance(items, tuple):
+      items = (items,)
+    return cls(*items)
+
+  def validate(self, data: Any) -> Any:  # noqa: ANN401
+    if isinstance(data, (pd.Series, pd.DataFrame)):
+      index = data.index
+
+      # Apply each validator to the index
+      for validator_item in self.validators:
+        # Handle both validator classes and instances
+        if isinstance(validator_item, type) and issubclass(validator_item, Validator):
+          validator = validator_item()
+        elif isinstance(validator_item, Validator):
+          validator = validator_item
+        else:
+          continue
+
+        # Validate the index
+        index = validator.validate(index)
+
     return data
 
 
@@ -245,7 +279,7 @@ class HasColumn(Validator):
     # Handle tuple: (column, validators...)
     column = items[0]
     validators = items[1:] if len(items) > 1 else ()
-    return cls(column, *validators)
+    return cls(column, *validators)  # type: ignore[arg-type]
 
   def validate(self, data: Any) -> Any:  # noqa: ANN401
     if isinstance(data, pd.DataFrame):
