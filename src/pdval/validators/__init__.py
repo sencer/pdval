@@ -12,6 +12,8 @@ from pdval.validators.value import (
   NonNegative,
   OneOf,
   Positive,
+  Shape,
+  StrictFinite,
 )
 
 __all__ = [
@@ -43,5 +45,7 @@ __all__ = [
   "Nullable",
   "OneOf",
   "Positive",
+  "Shape",
+  "StrictFinite",
   "Unique",
 ]
