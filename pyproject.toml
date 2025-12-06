@@ -91,6 +91,9 @@ exclude = [
     "build",
     "dist",
 ]
+# Allow skip_validation parameter between *args and **kwargs
+# This works at runtime but basedpyright is overly strict about ParamSpec
+reportGeneralTypeIssues = "none"
 
 # ============================================================
 # PYTEST CONFIGURATION
