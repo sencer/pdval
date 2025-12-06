@@ -22,30 +22,27 @@ def plain(data: pd.Series) -> float:
 
 
 @validated
-def decorated_simple(data: Validated[pd.Series, Finite], validate: bool = True) -> float:
+def decorated_simple(data: Validated[pd.Series, Finite]) -> float:
   return data.sum()
 
 
 @validated
-def decorated_multiple(
-  data: Validated[pd.Series, Finite, Positive], validate: bool = True
-) -> float:
+def decorated_multiple(data: Validated[pd.Series, Finite, Positive]) -> float:
   return data.sum()
 
 
 @validated
 def decorated_index(
-  data: Validated[pd.Series, Index[Datetime, MonoUp], Finite],
-  validate: bool = True,
+  data: Validated[pd.Series, Index[Datetime, MonoUp], Finite]
 ) -> float:
   return data.sum()
 
 
-def run_benchmark(func: Any, data: pd.Series, validate: bool | None, iterations: int):
-  if validate is None:
+def run_benchmark(func: Any, data: pd.Series, skip_val: bool | None, iterations: int):
+  if skip_val is None:
     return timeit.timeit(lambda: func(data), number=iterations)
   else:
-    return timeit.timeit(lambda: func(data, validate=validate), number=iterations)
+    return timeit.timeit(lambda: func(data, skip_validation=skip_val), number=iterations)
 
 
 def main():
@@ -60,15 +57,15 @@ def main():
   print("-" * 70)
 
   t_plain = run_benchmark(plain, small_data, None, iterations)
-  t_false = run_benchmark(decorated_simple, small_data, False, iterations)
-  t_true = run_benchmark(decorated_simple, small_data, True, iterations)
+  t_skip = run_benchmark(decorated_simple, small_data, True, iterations)
+  t_validate = run_benchmark(decorated_simple, small_data, False, iterations)
 
-  overhead_false = ((t_false - t_plain) / iterations) * 1_000_000
-  overhead_true = ((t_true - t_plain) / iterations) * 1_000_000
+  overhead_skip = ((t_skip - t_plain) / iterations) * 1_000_000
+  overhead_validate = ((t_validate - t_plain) / iterations) * 1_000_000
 
-  print(f"Plain function:              {t_plain:8.4f}s  (baseline)")
-  print(f"Decorated (validate=False):  {t_false:8.4f}s  (+{overhead_false:6.2f}µs/call)")
-  print(f"Decorated (validate=True):   {t_true:8.4f}s  (+{overhead_true:6.2f}µs/call)")
+  print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
+  print(f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)")
+  print(f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)")
   print()
 
   # Test 2: Large data (10,000 elements)
@@ -76,15 +73,15 @@ def main():
   print("-" * 70)
 
   t_plain = run_benchmark(plain, large_data, None, iterations)
-  t_false = run_benchmark(decorated_simple, large_data, False, iterations)
-  t_true = run_benchmark(decorated_simple, large_data, True, iterations)
+  t_skip = run_benchmark(decorated_simple, large_data, True, iterations)
+  t_validate = run_benchmark(decorated_simple, large_data, False, iterations)
 
-  overhead_false = ((t_false - t_plain) / iterations) * 1_000_000
-  overhead_true = ((t_true - t_plain) / iterations) * 1_000_000
+  overhead_skip = ((t_skip - t_plain) / iterations) * 1_000_000
+  overhead_validate = ((t_validate - t_plain) / iterations) * 1_000_000
 
-  print(f"Plain function:              {t_plain:8.4f}s  (baseline)")
-  print(f"Decorated (validate=False):  {t_false:8.4f}s  (+{overhead_false:6.2f}µs/call)")
-  print(f"Decorated (validate=True):   {t_true:8.4f}s  (+{overhead_true:6.2f}µs/call)")
+  print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
+  print(f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)")
+  print(f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)")
   print()
 
   # Test 3: Multiple validators
@@ -92,15 +89,15 @@ def main():
   print("-" * 70)
 
   t_plain = run_benchmark(plain, small_data, None, iterations)
-  t_false = run_benchmark(decorated_multiple, small_data, False, iterations)
-  t_true = run_benchmark(decorated_multiple, small_data, True, iterations)
+  t_skip = run_benchmark(decorated_multiple, small_data, True, iterations)
+  t_validate = run_benchmark(decorated_multiple, small_data, False, iterations)
 
-  overhead_false = ((t_false - t_plain) / iterations) * 1_000_000
-  overhead_true = ((t_true - t_plain) / iterations) * 1_000_000
+  overhead_skip = ((t_skip - t_plain) / iterations) * 1_000_000
+  overhead_validate = ((t_validate - t_plain) / iterations) * 1_000_000
 
-  print(f"Plain function:              {t_plain:8.4f}s  (baseline)")
-  print(f"Decorated (validate=False):  {t_false:8.4f}s  (+{overhead_false:6.2f}µs/call)")
-  print(f"Decorated (validate=True):   {t_true:8.4f}s  (+{overhead_true:6.2f}µs/call)")
+  print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
+  print(f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)")
+  print(f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)")
   print()
 
   # Test 4: Index validators
@@ -108,28 +105,28 @@ def main():
   print("-" * 70)
 
   t_plain = run_benchmark(plain, datetime_data, None, iterations)
-  t_false = run_benchmark(decorated_index, datetime_data, False, iterations)
-  t_true = run_benchmark(decorated_index, datetime_data, True, iterations)
+  t_skip = run_benchmark(decorated_index, datetime_data, True, iterations)
+  t_validate = run_benchmark(decorated_index, datetime_data, False, iterations)
 
-  overhead_false = ((t_false - t_plain) / iterations) * 1_000_000
-  overhead_true = ((t_true - t_plain) / iterations) * 1_000_000
+  overhead_skip = ((t_skip - t_plain) / iterations) * 1_000_000
+  overhead_validate = ((t_validate - t_plain) / iterations) * 1_000_000
 
-  print(f"Plain function:              {t_plain:8.4f}s  (baseline)")
-  print(f"Decorated (validate=False):  {t_false:8.4f}s  (+{overhead_false:6.2f}µs/call)")
-  print(f"Decorated (validate=True):   {t_true:8.4f}s  (+{overhead_true:6.2f}µs/call)")
+  print(f"Plain function:                     {t_plain:8.4f}s  (baseline)")
+  print(f"Decorated (skip_validation=True):   {t_skip:8.4f}s  (+{overhead_skip:6.2f}µs/call)")
+  print(f"Decorated (skip_validation=False):  {t_validate:8.4f}s  (+{overhead_validate:6.2f}µs/call)")
   print()
 
   # Summary
   print("=" * 70)
   print("Summary")
   print("=" * 70)
-  print("• validate=False adds ~20-30µs overhead per call (argument binding)")
-  print("• validate=True overhead scales with:")
+  print("• skip_validation=True adds ~0.5µs overhead (essentially zero)")
+  print("• skip_validation=False (default) overhead scales with:")
   print("  - Number of validators")
   print("  - Data size")
   print("  - Validator complexity")
   print()
-  print("Recommendation: Use validate=False in production hot paths after")
+  print("Recommendation: Use skip_validation=True in production hot paths after")
   print("                initial data validation during development/testing.")
 
 

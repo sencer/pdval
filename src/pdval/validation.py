@@ -388,34 +388,43 @@ def _validate_arguments(
 def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
   """Decorator to validate function arguments based on Annotated types.
 
-  If the function has a `validate` argument and it is True (default),
-  this decorator inspects the type hints of the arguments. If an argument
-  is annotated with `Annotated[Type, Validator]`, it calls `Validator.validate()`
-  on that argument.
+  The decorator automatically adds a `skip_validation` parameter to the function.
+  When `skip_validation=False` (default), validation is performed. When
+  `skip_validation=True`, validation is skipped for maximum performance.
 
   Args:
     func: The function to decorate.
 
   Returns:
-    The decorated function.
+    The decorated function with automatic validation support.
 
   Example:
     >>> from pdval import validated, Validated, Finite
     >>> import pandas as pd
     >>>
     >>> @validated
-    ... def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    ... def process(data: Validated[pd.Series, Finite]):
     ...     return data.sum()
+    >>>
+    >>> # Validation enabled by default
+    >>> result = process(valid_data)
+    >>>
+    >>> # Skip validation for performance
+    >>> result = process(valid_data, skip_validation=True)
   """
 
   @functools.wraps(func)
   def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-    # Check if validation is enabled (default True)
-    # Look for 'validate' in kwargs, default to True if not present
-    should_validate = kwargs.get("validate", True)
+    # Check if validation should be skipped (default False = validate)
+    # The decorator injects this parameter - functions don't need to define it
+    skip_validation = kwargs.pop("skip_validation", False)
+    
+    # Backward compatibility: also check for old 'validate' parameter
+    if "validate" in kwargs:
+      skip_validation = not kwargs.pop("validate")
 
-    if should_validate:
-      # Need to bind args for validation - only when validating
+    if not skip_validation:
+      # Need to bind args for validation
       sig = inspect.signature(func)
       bound_args = sig.bind(*args, **kwargs)
       bound_args.apply_defaults()
