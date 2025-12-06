@@ -154,39 +154,158 @@ class UniqueIndex(Validator[pd.Series | pd.DataFrame | pd.Index]):
     return data
 
 
-class NoTimeGaps(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for no time gaps in DatetimeIndex."""
+def _get_datetime_array(
+  data: pd.Series | pd.Index,
+) -> np.ndarray | None:
+  """Extract datetime values as int64 nanoseconds array.
+
+  Returns None if data is not datetime type.
+  """
+  if isinstance(data, pd.DatetimeIndex):
+    return np.asarray(data.view(np.int64))
+  if isinstance(data, pd.Series) and pd.api.types.is_datetime64_any_dtype(data.dtype):
+    return np.asarray(data.values.view(np.int64))  # type: ignore[union-attr]
+  return None
+
+
+class NoTimeGaps(Validator[pd.Series | pd.Index]):
+  """Validator for no time gaps in datetime data.
+
+  Works on:
+  - pd.Series with datetime64 dtype (validates values)
+  - pd.DatetimeIndex (validates index, use with Index[NoTimeGaps[...]])
+
+  Example:
+    # Validate datetime column values
+    data: Validated[pd.Series, NoTimeGaps["1min"]]
+
+    # Validate index via Index wrapper
+    data: Validated[pd.DataFrame, Index[NoTimeGaps["1min"]]]
+  """
 
   def __init__(self, freq: str) -> None:
     super().__init__()
     self.freq = freq
+    # Pre-compute expected nanoseconds for performance
+    self._expected_ns: int = pd.Timedelta(pd.tseries.frequencies.to_offset(freq)).value  # type: ignore[arg-type]
 
   def __class_getitem__(cls, item: str) -> NoTimeGaps:
     return cls(item)
 
   @override
-  def validate(
-    self, data: pd.Series | pd.DataFrame | pd.Index
-  ) -> pd.Series | pd.DataFrame | pd.Index:
-    index = None
-    if isinstance(data, pd.Index):
-      index = data
-    elif isinstance(data, (pd.Series, pd.DataFrame)):
-      index = data.index  # type: ignore[union-attr]
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
+    dt_array = _get_datetime_array(data)
 
-    if index is not None:
-      if not isinstance(index, pd.DatetimeIndex):
-        raise ValueError("NoTimeGaps requires a DatetimeIndex")
+    if dt_array is None:
+      raise ValueError(
+        "NoTimeGaps requires datetime data (datetime64 Series or DatetimeIndex)"
+      )
 
-      if len(index) <= 1:
-        return data
+    if len(dt_array) <= 1:
+      return data
 
-      # Fully vectorized: numpy diff on underlying int64 nanoseconds
-      expected_ns = pd.Timedelta(pd.tseries.frequencies.to_offset(self.freq)).value  # type: ignore[arg-type]
-      actual_diffs_ns = np.diff(np.asarray(index.view(np.int64)))
+    # Fully vectorized: numpy diff on underlying int64 nanoseconds
+    actual_diffs_ns = np.diff(dt_array)
 
-      if not np.all(actual_diffs_ns == expected_ns):
-        raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
+    if not np.all(actual_diffs_ns == self._expected_ns):
+      raise ValueError(f"Time gaps detected with frequency '{self.freq}'")
+
+    return data
+
+
+class MaxGap(Validator[pd.Series | pd.Index]):
+  """Validator for maximum allowed time gap in datetime data.
+
+  Unlike NoTimeGaps which requires exact frequency, MaxGap allows gaps
+  up to (and including) the specified duration. Useful for data with
+  occasional missing values.
+
+  Works on:
+  - pd.Series with datetime64 dtype (validates values)
+  - pd.DatetimeIndex (validates index, use with Index[MaxGap[...]])
+
+  Example:
+    # Allow up to 2-minute gaps in 1-minute data (tolerates 1 missing row)
+    data: Validated[pd.Series, MaxGap["2min"]]
+
+    # Validate index via Index wrapper
+    data: Validated[pd.DataFrame, Index[MaxGap["5min"]]]
+  """
+
+  def __init__(self, max_gap: str) -> None:
+    super().__init__()
+    self.max_gap = max_gap
+    # Pre-compute max gap nanoseconds for performance
+    self._max_gap_ns: int = pd.Timedelta(
+      pd.tseries.frequencies.to_offset(max_gap)
+    ).value  # type: ignore[arg-type]
+
+  def __class_getitem__(cls, item: str) -> MaxGap:
+    return cls(item)
+
+  @override
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
+    dt_array = _get_datetime_array(data)
+
+    if dt_array is None:
+      raise ValueError(
+        "MaxGap requires datetime data (datetime64 Series or DatetimeIndex)"
+      )
+
+    if len(dt_array) <= 1:
+      return data
+
+    # Fully vectorized: numpy diff on underlying int64 nanoseconds
+    actual_diffs_ns = np.diff(dt_array)
+
+    if np.any(actual_diffs_ns > self._max_gap_ns):
+      max_found = pd.Timedelta(nanoseconds=int(np.max(actual_diffs_ns)))
+      raise ValueError(
+        f"Time gap exceeds maximum '{self.max_gap}' (found gap of {max_found})"
+      )
+
+    return data
+
+
+class MaxDiff(Validator[pd.Series]):
+  """Validator for maximum allowed difference between consecutive numeric values.
+
+  Useful for validating that numeric data doesn't have large jumps.
+
+  Example:
+    # Price changes must be at most 10
+    data: Validated[pd.Series, MaxDiff[10.0]]
+
+    # Validate specific column
+    data: Validated[pd.DataFrame, HasColumn["price", MaxDiff[5.0]]]
+  """
+
+  def __init__(self, max_diff: float | int) -> None:
+    super().__init__()
+    self.max_diff = max_diff
+
+  def __class_getitem__(cls, item: float | int) -> MaxDiff:
+    return cls(item)
+
+  @override
+  def validate(self, data: pd.Series) -> pd.Series:
+    if not isinstance(data, pd.Series):
+      raise TypeError("MaxDiff requires a pandas Series")
+
+    if not pd.api.types.is_numeric_dtype(data.dtype):
+      raise ValueError("MaxDiff requires numeric data")
+
+    if len(data) <= 1:
+      return data
+
+    # Use absolute difference for numeric data
+    diffs = np.abs(np.diff(data.values))  # type: ignore[arg-type]
+
+    if np.any(diffs > self.max_diff):
+      max_found = float(np.max(diffs))
+      raise ValueError(
+        f"Difference exceeds maximum {self.max_diff} (found diff of {max_found})"
+      )
 
     return data
 
