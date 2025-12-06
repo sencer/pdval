@@ -1,6 +1,6 @@
 """pdval - Pandas validation using Annotated types and decorators."""
 
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 
 from pdval.validation import (
   Datetime,
@@ -13,6 +13,8 @@ from pdval.validation import (
   IsDtype,
   Le,
   Lt,
+  MaxDiff,
+  MaxGap,
   MaybeEmpty,
   MonoDown,
   MonoUp,
@@ -39,6 +41,8 @@ __all__ = [
   "IsDtype",
   "Le",
   "Lt",
+  "MaxDiff",
+  "MaxGap",
   "MaybeEmpty",
   "MonoDown",
   "MonoUp",

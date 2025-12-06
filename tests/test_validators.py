@@ -746,23 +746,37 @@ class TestUniqueIndex:
 
 
 class TestNoTimeGaps:
-  def test_no_time_gaps(self):
+  def test_no_time_gaps_datetime_values(self):
+    """Test NoTimeGaps with datetime Series values."""
     validator = NoTimeGaps(freq="1D")
 
-    # Valid
-    dates = pd.date_range("2024-01-01", periods=3, freq="1D")
-    data = pd.Series([1, 2, 3], index=dates)
+    # Valid datetime values
+    timestamps = pd.date_range("2024-01-01", periods=3, freq="1D")
+    data = pd.Series(timestamps)
     assert validator.validate(data) is data
 
     # Invalid (missing day)
-    dates = pd.to_datetime(["2024-01-01", "2024-01-03"])
-    data = pd.Series([1, 2], index=dates)
+    timestamps = pd.to_datetime(["2024-01-01", "2024-01-03"])
+    data = pd.Series(timestamps)
     with pytest.raises(ValueError, match="Time gaps detected"):
       validator.validate(data)
 
-  def test_empty_index(self):
+  def test_no_time_gaps_datetimeindex(self):
+    """Test NoTimeGaps with DatetimeIndex directly."""
     validator = NoTimeGaps(freq="1D")
-    data = pd.Series([], index=pd.DatetimeIndex([]))
+
+    # Valid DatetimeIndex
+    index = pd.date_range("2024-01-01", periods=3, freq="1D")
+    assert validator.validate(index).equals(index)
+
+    # Invalid (missing day)
+    index = pd.DatetimeIndex(["2024-01-01", "2024-01-03"])
+    with pytest.raises(ValueError, match="Time gaps detected"):
+      validator.validate(index)
+
+  def test_empty_datetime_series(self):
+    validator = NoTimeGaps(freq="1D")
+    data = pd.Series([], dtype="datetime64[ns]")
     assert validator.validate(data) is data
 
 
