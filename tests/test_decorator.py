@@ -5,11 +5,12 @@ import pandas as pd
 import pytest
 
 from pdval import (
-  DateTimeIndexed,
+  Datetime,
   Finite,
   Ge,
   HasColumns,
-  MonotonicIndex,
+  Index,
+  MonoUp,
   Positive,
   Validated,
   validated,
@@ -223,7 +224,7 @@ class TestComplexValidations:
 
     @validated
     def resample_data(
-      data: Validated[pd.Series, DateTimeIndexed, MonotonicIndex, Finite],
+      data: Validated[pd.Series, Index[Datetime, MonoUp], Finite],
       freq: str = "1D",
       validate: bool = True,
     ):
