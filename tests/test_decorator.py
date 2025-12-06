@@ -227,7 +227,7 @@ class TestComplexValidations:
       return data.resample(freq).mean()
 
     # Valid time series
-    dates = pd.date_range("2024-01-01", periods=10, freq="1H")
+    dates = pd.date_range("2024-01-01", periods=10, freq="h")
     valid_data = pd.Series(range(10), index=dates)
     result = resample_data(valid_data)
     assert isinstance(result.index, pd.DatetimeIndex)
