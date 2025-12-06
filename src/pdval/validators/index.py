@@ -9,70 +9,67 @@ import pandas as pd
 from pdval.base import Validator
 
 
-class Datetime(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for datetime index or values."""
+class Datetime(Validator[pd.Series | pd.Index]):
+  """Validator for datetime index or values.
+
+  Use with Index[Datetime] to apply to Series/DataFrame index.
+  Can be applied directly to pd.Index or pd.DatetimeIndex.
+  """
 
   @override
-  def validate(
-    self, data: pd.Series | pd.DataFrame | pd.Index
-  ) -> pd.Series | pd.DataFrame | pd.Index:
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
     if isinstance(data, pd.Index) and not isinstance(data, pd.DatetimeIndex):
       raise ValueError("Index must be DatetimeIndex")
-    if isinstance(data, (pd.Series, pd.DataFrame)) and not isinstance(
-      data.index,
-      pd.DatetimeIndex,  # type: ignore[union-attr]
-    ):
+    if isinstance(data, pd.Series) and not isinstance(data.index, pd.DatetimeIndex):
       raise ValueError("Index must be DatetimeIndex")
     return data
 
 
-class UniqueIndex(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for unique index."""
+class Unique(Validator[pd.Series | pd.Index]):
+  """Validator for unique values.
+
+  Use with Index[Unique] to apply to Series/DataFrame index.
+  Can be applied directly to pd.Index or pd.Series values.
+  """
 
   @override
-  def validate(
-    self, data: pd.Series | pd.DataFrame | pd.Index
-  ) -> pd.Series | pd.DataFrame | pd.Index:
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
     if isinstance(data, pd.Index) and not data.is_unique:
-      raise ValueError("Index must be unique")
-    if isinstance(data, (pd.Series, pd.DataFrame)) and not data.index.is_unique:  # type: ignore[union-attr]
-      raise ValueError("Index must be unique")
+      raise ValueError("Values must be unique")
+    if isinstance(data, pd.Series) and not data.is_unique:
+      raise ValueError("Values must be unique")
     return data
 
 
-class MonoUp(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for monotonically increasing values or index."""
+class MonoUp(Validator[pd.Series | pd.Index]):
+  """Validator for monotonically increasing values.
+
+  Use with Index[MonoUp] to apply to Series/DataFrame index.
+  Can be applied directly to pd.Index or pd.Series values.
+  """
 
   @override
-  def validate(
-    self, data: pd.Series | pd.DataFrame | pd.Index
-  ) -> pd.Series | pd.DataFrame | pd.Index:
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
     if isinstance(data, pd.Index) and not data.is_monotonic_increasing:
-      raise ValueError("Index must be monotonically increasing")
+      raise ValueError("Values must be monotonically increasing")
     if isinstance(data, pd.Series) and not data.is_monotonic_increasing:
       raise ValueError("Values must be monotonically increasing")
-    if isinstance(data, pd.DataFrame):
-      for col in data.columns:
-        if not data[col].is_monotonic_increasing:
-          raise ValueError(f"Column '{col}' values must be monotonically increasing")
     return data
 
 
-class MonoDown(Validator[pd.Series | pd.DataFrame | pd.Index]):
-  """Validator for monotonically decreasing values or index."""
+class MonoDown(Validator[pd.Series | pd.Index]):
+  """Validator for monotonically decreasing values.
+
+  Use with Index[MonoDown] to apply to Series/DataFrame index.
+  Can be applied directly to pd.Index or pd.Series values.
+  """
 
   @override
-  def validate(
-    self, data: pd.Series | pd.DataFrame | pd.Index
-  ) -> pd.Series | pd.DataFrame | pd.Index:
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
     if isinstance(data, pd.Index) and not data.is_monotonic_decreasing:
-      raise ValueError("Index must be monotonically decreasing")
+      raise ValueError("Values must be monotonically decreasing")
     if isinstance(data, pd.Series) and not data.is_monotonic_decreasing:
       raise ValueError("Values must be monotonically decreasing")
-    if isinstance(data, pd.DataFrame):
-      for col in data.columns:
-        if not data[col].is_monotonic_decreasing:
-          raise ValueError(f"Column '{col}' values must be monotonically decreasing")
     return data
 
 

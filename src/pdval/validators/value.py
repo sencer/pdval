@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import override
+from typing import Any, Literal, get_args, get_origin, override
 
 import numpy as np
 import pandas as pd
@@ -77,4 +77,60 @@ class Positive(Validator[pd.Series | pd.DataFrame]):
   def validate(self, data: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     if isinstance(data, (pd.Series, pd.DataFrame)) and np.any(data.values <= 0):  # type: ignore[operator]
       raise ValueError("Data must be positive")
+    return data
+
+
+class OneOf(Validator[pd.Series | pd.Index]):
+  """Validator for categorical values - ensures all values are in allowed set.
+
+  Supports multiple syntax forms:
+  - OneOf[Literal["a", "b", "c"]]
+  - OneOf["a", "b", "c"]
+  - OneOf[Literal["a"], Literal["b"], Literal["c"]]
+
+  Can be used with Index[] wrapper for index validation:
+  - Index[OneOf["x", "y", "z"]]
+
+  Can be used with HasColumn for column-specific validation:
+  - HasColumn["category", OneOf["a", "b", "c"]]
+  """
+
+  def __init__(self, *allowed: Any) -> None:  # noqa: ANN401  # pyright: ignore[reportExplicitAny]
+    super().__init__()
+    self.allowed = set(allowed)
+
+  def __class_getitem__(cls, items: object) -> OneOf:
+    # Handle single Literal with multiple values: Literal["a", "b", "c"]
+    if get_origin(items) is Literal:
+      items = get_args(items)
+    # Handle tuple of items (could be strings or Literals)
+    elif isinstance(items, tuple):
+      # Flatten any Literals in the tuple: (Literal["a"], Literal["b"]) -> ("a", "b")
+      flattened: list[Any] = []  # pyright: ignore[reportExplicitAny]
+      for item in items:
+        if get_origin(item) is Literal:
+          flattened.extend(get_args(item))
+        else:
+          flattened.append(item)
+      items = tuple(flattened)
+
+    if not isinstance(items, tuple):
+      items = (items,)
+
+    return cls(*items)
+
+  @override
+  def validate(self, data: pd.Series | pd.Index) -> pd.Series | pd.Index:
+    if isinstance(data, pd.Index):
+      invalid = set(data) - self.allowed
+      if invalid:
+        raise ValueError(
+          f"Values must be one of {self.allowed}, got invalid: {invalid}"
+        )
+    elif isinstance(data, pd.Series):
+      invalid = set(data.dropna().unique()) - self.allowed
+      if invalid:
+        raise ValueError(
+          f"Values must be one of {self.allowed}, got invalid: {invalid}"
+        )
     return data

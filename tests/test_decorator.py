@@ -260,7 +260,7 @@ class TestComplexValidations:
       pd.Timestamp("2024-01-02"),
     ]
     non_monotonic = pd.Series([1, 2, 3], index=dates_shuffled)
-    with pytest.raises(ValueError, match="Index must be monotonic"):
+    with pytest.raises(ValueError, match="must be monotonically increasing"):
       resample_data(non_monotonic)
 
   def test_percentage_returns_validation(self):
