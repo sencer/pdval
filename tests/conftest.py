@@ -34,14 +34,12 @@ def series_with_negative():
 @pytest.fixture
 def valid_dataframe():
   """Valid DataFrame with common OHLC-like structure."""
-  return pd.DataFrame(
-    {
-      "high": [102, 105, 104, 107, 106],
-      "low": [100, 103, 101, 104, 103],
-      "close": [101, 104, 102, 105, 104],
-      "volume": [1000, 1200, 1100, 1300, 1150],
-    }
-  )
+  return pd.DataFrame({
+    "high": [102, 105, 104, 107, 106],
+    "low": [100, 103, 101, 104, 103],
+    "close": [101, 104, 102, 105, 104],
+    "volume": [1000, 1200, 1100, 1300, 1150],
+  })
 
 
 @pytest.fixture
