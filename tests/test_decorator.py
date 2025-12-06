@@ -24,7 +24,7 @@ class TestValidatedDecorator:
     """Test @validated decorator validates arguments."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite]):
       return data.sum()
 
     valid_data = pd.Series([1.0, 2.0, 3.0])
@@ -35,7 +35,7 @@ class TestValidatedDecorator:
     """Test @validated decorator rejects invalid data."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite]):
       return data.sum()
 
     invalid_data = pd.Series([1.0, np.inf, 3.0])
@@ -43,22 +43,22 @@ class TestValidatedDecorator:
       process(invalid_data)
 
   def test_validation_can_be_disabled(self):
-    """Test validation can be disabled with validate=False."""
+    """Test validation can be disabled with skip_validation=True."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite]):
       return data.sum()
 
     invalid_data = pd.Series([1.0, np.inf, 3.0])
     # Should not raise when validation is disabled
-    result = process(invalid_data, validate=False)
+    result = process(invalid_data, skip_validation=True)
     assert np.isinf(result)
 
   def test_multiple_validators(self):
     """Test multiple validators in chain."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite, Positive], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite, Positive]):
       return data.sum()
 
     # Valid data
@@ -96,7 +96,7 @@ class TestValidatedDecorator:
     """Test decorator preserves function name and docstring."""
 
     @validated
-    def my_function(data: Validated[pd.Series, Finite], validate: bool = True):
+    def my_function(data: Validated[pd.Series, Finite]):
       """My docstring."""
       return data.sum()
 
@@ -108,7 +108,7 @@ class TestValidatedDecorator:
 
     class Processor:
       @validated
-      def process(self, data: Validated[pd.Series, Finite], validate: bool = True):
+      def process(self, data: Validated[pd.Series, Finite]):
         return data.sum()
 
     processor = Processor()
@@ -121,7 +121,7 @@ class TestValidatedDecorator:
 
     @validated
     def process(
-      data: Validated[pd.Series, Finite] | None = None, validate: bool = True
+      data: Validated[pd.Series, Finite] | None = None
     ):
       if data is None:
         return 0
@@ -146,7 +146,6 @@ class TestValidatedDecorator:
     def combine(
       data1: Validated[pd.Series, Finite],
       data2: Validated[pd.Series, Finite],
-      validate: bool = True,
     ):
       return data1 + data2
 
@@ -170,7 +169,6 @@ class TestValidatedDecorator:
     def process(
       data: Validated[pd.Series, Finite],
       multiplier: float,
-      validate: bool = True,
     ):
       return data * multiplier
 
@@ -190,7 +188,6 @@ class TestComplexValidations:
       data: Validated[
         pd.DataFrame, HasColumns["high", "low", "close"], Ge["high", "low"]  # noqa: F821
       ],
-      validate: bool = True,
     ):
       hl = data["high"] - data["low"]
       hc = abs(data["high"] - data["close"].shift(1))
@@ -226,7 +223,6 @@ class TestComplexValidations:
     def resample_data(
       data: Validated[pd.Series, Index[Datetime, MonoUp], Finite],
       freq: str = "1D",
-      validate: bool = True,
     ):
       return data.resample(freq).mean()
 
@@ -256,7 +252,7 @@ class TestComplexValidations:
 
     @validated
     def calculate_returns(
-      prices: Validated[pd.Series, Finite, Positive], validate: bool = True
+      prices: Validated[pd.Series, Finite, Positive]
     ):
       return prices.pct_change()
 
@@ -281,7 +277,7 @@ class TestEdgeCases:
     """Test validation with empty Series."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite]):
       return len(data)
 
     empty_data = pd.Series([], dtype=float)
@@ -292,11 +288,11 @@ class TestEdgeCases:
     """Test both Validator class and instance work."""
 
     @validated
-    def with_class(data: Validated[pd.Series, Finite], validate: bool = True):
+    def with_class(data: Validated[pd.Series, Finite]):
       return data.sum()
 
     @validated
-    def with_instance(data: Validated[pd.Series, Finite()], validate: bool = True):
+    def with_instance(data: Validated[pd.Series, Finite()]):
       return data.sum()
 
     valid_data = pd.Series([1.0, 2.0, 3.0])
@@ -332,7 +328,7 @@ class TestEdgeCases:
     """Test validation works with keyword arguments."""
 
     @validated
-    def process(data: Validated[pd.Series, Finite], validate: bool = True):
+    def process(data: Validated[pd.Series, Finite]):
       return data.sum()
 
     valid_data = pd.Series([1.0, 2.0, 3.0])
@@ -346,7 +342,7 @@ class TestEdgeCases:
     assert result == 6.0
 
     # Mixed
-    result = process(valid_data, validate=True)
+    result = process(valid_data, skip_validation=False)
     assert result == 6.0
 
   def test_default_argument_values(self):
@@ -355,7 +351,6 @@ class TestEdgeCases:
     @validated
     def process(
       data: Validated[pd.Series, Finite] = pd.Series([1.0, 2.0]),
-      validate: bool = True,
     ):
       return data.sum()
 
