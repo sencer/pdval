@@ -406,23 +406,27 @@ class HasColumn(Validator[pd.DataFrame]):
     return data
 
 
-@overload
-def validated[P: ParamSpec, R](
-  func: Callable[P, R],  # pyright: ignore[reportInvalidTypeForm]
-) -> Callable[P, R]: ...  # pyright: ignore[reportInvalidTypeForm]
+P = ParamSpec("P")
+R = typing.TypeVar("R")
 
 
 @overload
-def validated[P: ParamSpec, R](
+def validated(  # noqa: UP047
+  func: Callable[P, R],
+) -> Callable[P, R]: ...
+
+
+@overload
+def validated(
   *, skip_validation_by_default: bool = False
-) -> Callable[[Callable[P, R]], Callable[P, R]]: ...  # pyright: ignore[reportInvalidTypeForm]
+) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
 
 
-def validated[P: ParamSpec, R](
-  func: Callable[P, R] | None = None,  # pyright: ignore[reportInvalidTypeForm]
+def validated(  # noqa: UP047
+  func: Callable[P, R] | None = None,
   *,
   skip_validation_by_default: bool = False,
-) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:  # pyright: ignore[reportInvalidTypeForm]
+) -> Callable[P, R] | Callable[[Callable[P, R]], Callable[P, R]]:
   """Decorator to validate function arguments based on Annotated types.
 
   The decorator automatically adds a `skip_validation` parameter to the function.
@@ -462,97 +466,72 @@ def validated[P: ParamSpec, R](
     >>> result = fast_process(valid_data, skip_validation=False)
   """
 
-  def _decorator(
-    func: Callable[P, R],  # pyright: ignore[reportInvalidTypeForm]
-  ) -> Callable[P, R]:  # pyright: ignore[reportInvalidTypeForm]
-    # 1. Compute metadata ONCE at decoration time
+  def decorator(func: Callable[P, R]) -> Callable[P, R]:
+    # Inspect function signature
     sig = inspect.signature(func)
+    type_hints = typing.get_type_hints(func, include_extras=True)
 
-    # Resolve type hints to handle string annotations
-    try:
-      type_hints = typing.get_type_hints(func, include_extras=True)
-    except Exception:
-      # Fallback if resolution fails (e.g. during development/testing)
-      type_hints = {}
-
-    # Pre-compute a mapping of arg_name -> list[Validator]
+    # Pre-compute validators for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}
+    for name, _ in sig.parameters.items():
+      if name in type_hints:
+        hint = type_hints[name]
 
-    for name, param in sig.parameters.items():
-      if name == "self":
-        continue
+        # Handle Optional/Union types
+        origin = get_origin(hint)
+        if (
+          origin is typing.Union
+          or str(origin) == "typing.Union"
+          or str(origin) == "<class 'types.UnionType'>"
+        ):
+          # Check args for Annotated
+          for arg in get_args(hint):
+            if get_origin(arg) is Annotated:
+              hint = arg
+              break
 
-      annotation = type_hints.get(name, param.annotation)
-      origin = get_origin(annotation)
-
-      # Handle Optional[Annotated[...]] / Union[Annotated[...], None]
-      if origin is typing.Union:
-        args = get_args(annotation)
-        for arg in args:
-          if get_origin(arg) is Annotated:
-            annotation = arg
-            origin = Annotated
-            break
-
-      if origin is Annotated:
-        metadata = get_args(annotation)
-        validators = []
-        # Iterate over metadata (skipping the first one which is the type)
-        for item in metadata[1:]:
-          if isinstance(item, type) and issubclass(item, Validator):
-            validators.append(item())
-          elif isinstance(item, Validator) or (
-            hasattr(item, "validate") and callable(item.validate)
-          ):
-            validators.append(item)
-
-        if validators:
-          arg_validators[name] = validators
-
-    # Optimization: If no validators are found, return the original function
-    # BUT we still need to support the skip_validation arg if the user passes it.
-    # However, if we return the original function, passing skip_validation might error
-    # if the original function doesn't accept **kwargs.
-    # So we only return original if we can ensure signature compatibility or if we don't
-    # care about the arg.
-    # Given the contract says "automatically adds a skip_validation parameter",
-    # we should probably keep the wrapper but make it very fast.
+        if get_origin(hint) is Annotated:
+          args = get_args(hint)
+          # First arg is the type, rest are metadata (validators)
+          validators = []
+          for item in args[1:]:
+            v = _instantiate_validator(item)
+            if v:
+              validators.append(v)
+          if validators:
+            arg_validators[name] = validators
 
     @functools.wraps(func)
-    def wrapper(
-      *args: P.args,
-      skip_validation: bool = skip_validation_by_default,
-      **kwargs: P.kwargs,
-    ) -> R:
-      if skip_validation or not arg_validators:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+      # Check for skip_validation in kwargs
+      skip = kwargs.pop("skip_validation", skip_validation_by_default)
+      if skip:
         return func(*args, **kwargs)
 
-      # 2. Bind args
-      # Note: sig.bind is still somewhat expensive, but necessary to map args to names
-      bound = sig.bind(*args, **kwargs)
-      bound.apply_defaults()
+      # Bind arguments
+      bound_args = sig.bind(*args, **kwargs)
+      bound_args.apply_defaults()
 
-      # 3. Validate using pre-computed metadata
-      for name, value in bound.arguments.items():
-        # Skip if value is None (unless we want to validate None,
-        # but usually we don't for Optional)
-        if value is None:
-          continue
-
+      # Validate arguments
+      for name, value in bound_args.arguments.items():
         if name in arg_validators:
-          for validator in arg_validators[name]:
-            # No try/except block needed if we just want to propagate the error
-            value = validator.validate(value)
+          for v in arg_validators[name]:
+            v.validate(value)
 
-          # Update the bound argument with the validated value
-          # (in case validator modified it)
-          bound.arguments[name] = value
+      return func(*args, **kwargs)
 
-      return func(*bound.args, **bound.kwargs)
-
-    return wrapper  # type: ignore[return-value]
+    return wrapper
 
   if func is None:
-    return _decorator
+    return decorator  # type: ignore
 
-  return _decorator(func)
+  return decorator(func)
+
+
+def _instantiate_validator(item: Any) -> Validator[Any] | None:  # noqa: ANN401
+  """Helper to instantiate a validator from a type or instance."""
+  if isinstance(item, type) and issubclass(item, Validator):
+    return item()
+  if isinstance(item, Validator):
+    return item
+  return None
