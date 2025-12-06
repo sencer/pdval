@@ -4,37 +4,56 @@
 
 Benchmark measuring the overhead of the `@validated` decorator with 10,000 iterations:
 
-### Results Summary
+### Results Summary (After Optimization)
 
 | Scenario | validate=False Overhead | validate=True Overhead |
 |----------|------------------------|----------------------|
-| Small Series (100 elements) | **25.49µs/call** | 212.45µs/call |
-| Large Series (10,000 elements) | **25.92µs/call** | 229.53µs/call |
-| Multiple Validators (2) | **26.48µs/call** | 290.81µs/call |
-| Index Validators (3) | **26.69µs/call** | 237.02µs/call |
+| Small Series (100 elements) | **0.41µs/call** | 210.22µs/call |
+| Large Series (10,000 elements) | **0.75µs/call** | 226.42µs/call |
+| Multiple Validators (2) | **0.30µs/call** | 285.67µs/call |
+| Index Validators (3) | **0.60µs/call** | 236.42µs/call |
 
 ### Key Findings
 
-1. **`validate=False` overhead is consistent at ~25-27µs per call**, regardless of:
-   - Data size
-   - Number of validators
-   - Validator complexity
+1. **`validate=False` overhead is essentially zero (~0.5µs per call)**, achieved by:
+   - Checking `kwargs.get("validate", True)` directly
+   - Only using `signature.bind()` when validation is actually needed
+   - Following the pattern from hipr's `@configurable` decorator
 
 2. **`validate=True` overhead scales with**:
    - Number of validators (more validators = more time)
    - Validator complexity (Index validators do more work)
    - Data size (slightly, since validation needs to check all elements)
 
-3. **Overhead breakdown**:
-   - The ~25µs with `validate=False` comes from Python's `inspect.signature().bind()` machinery
-   - The validation itself adds ~200-300µs depending on complexity
+3. **Performance improvement**:
+   - **~50x faster** with `validate=False` compared to previous implementation
+   - Previous: ~25µs overhead (from `signature.bind()` on every call)
+   - Current: ~0.5µs overhead (negligible)
 
 ### Recommendations
 
 - **Development/Testing**: Use `validate=True` (default) to catch data issues early
-- **Production hot paths**: Use `validate=False` after initial validation to minimize overhead
+- **Production hot paths**: Use `validate=False` for virtually zero overhead
 - **One-time operations**: The overhead is negligible - validation is worth it
 - **Tight loops**: Consider validating once before the loop, then use `validate=False` inside
+
+### Implementation Details
+
+The optimization avoids `signature.bind()` when `validate=False` by:
+```python
+def wrapper(*args, **kwargs):
+    should_validate = kwargs.get("validate", True)
+    
+    if should_validate:
+        # Only bind args when we need to validate
+        sig = inspect.signature(func)
+        bound_args = sig.bind(*args, **kwargs)
+        # ... validate ...
+        return func(*bound_args.args, **bound_args.kwargs)
+    
+    # Fast path: direct call
+    return func(*args, **kwargs)
+```
 
 ### Running the Benchmark
 

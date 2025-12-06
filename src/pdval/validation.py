@@ -410,17 +410,20 @@ def validated(func: Callable[P, R]) -> Callable[P, R]:  # noqa: UP047
 
   @functools.wraps(func)
   def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-    # Check if validation is enabled
-    # We look for 'validate' in kwargs or default values
-    sig = inspect.signature(func)
-    bound_args = sig.bind(*args, **kwargs)
-    bound_args.apply_defaults()
-
-    should_validate = bound_args.arguments.get("validate", True)
+    # Check if validation is enabled (default True)
+    # Look for 'validate' in kwargs, default to True if not present
+    should_validate = kwargs.get("validate", True)
 
     if should_validate:
+      # Need to bind args for validation - only when validating
+      sig = inspect.signature(func)
+      bound_args = sig.bind(*args, **kwargs)
+      bound_args.apply_defaults()
       _validate_arguments(func, bound_args)
+      # Return with validated bound args
+      return func(*bound_args.args, **bound_args.kwargs)
 
-    return func(*bound_args.args, **bound_args.kwargs)
+    # Fast path: no validation, just call directly
+    return func(*args, **kwargs)
 
   return wrapper
