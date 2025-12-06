@@ -1,5 +1,8 @@
 # pdval
 
+![CI](https://github.com/sencer/pdval/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/sencer/pdval/branch/main/graph/badge.svg)](https://app.codecov.io/github/sencer/pdval)
+
 **Pandas validation using Annotated types and decorators**
 
 `pdval` is a lightweight Python library for validating pandas DataFrames and Series using Python's `Annotated` types and decorators. It provides a clean, type-safe way to express data validation constraints directly in function signatures.
@@ -23,6 +26,11 @@ Or with uv:
 ```bash
 uv add pdval
 ```
+
+> **Note**: If you prefer using [Pandera](https://pandera.readthedocs.io/) as the underlying validation engine (for more detailed error reporting and robustness), install the separate package:
+> ```bash
+> pip install pdval-pandera
+> ```
 
 ## Quick Start
 
@@ -308,8 +316,6 @@ While [Pandera](https://pandera.readthedocs.io/) is excellent for comprehensive 
 - **Decorator simplicity** - Single `@validated` decorator
 - **Type annotation syntax** - Uses Python's native `Annotated` types
 - **Minimal overhead** - Lightweight with no heavy dependencies
-
-> **Note**: If you prefer using Pandera as the underlying validation engine (for more detailed error reporting and robustness), check out the [`pandera`](https://github.com/sselcuk/pdval/tree/pandera) branch of this repository.
 
 Use `pdval` when you want simple, inline validation. Use Pandera when you need comprehensive schema management, complex validation logic, or data contracts.
 
