@@ -50,6 +50,16 @@ class TestValidatedDecorator:
     with pytest.raises(ValueError, match="must be finite"):
       process(invalid_data)
 
+  def test_error_message_includes_context(self):
+    """Test that error messages include function name, parameter name, and validator."""
+
+    @validated
+    def my_func(prices: Validated[pd.Series, Finite]):
+      return prices.sum()
+
+    with pytest.raises(ValueError, match=r"parameter 'prices'.*'my_func'.*Finite"):
+      my_func(pd.Series([1.0, np.inf]))
+
   def test_validation_can_be_disabled(self):
     """Test validation can be disabled with skip_validation=True."""
 

@@ -207,16 +207,21 @@ def validated[**P, R](
       bound_args.apply_defaults()
 
       # Validate arguments
-      try:
-        for arg_name, value in bound_args.arguments.items():
-          if arg_name in arg_validators:
-            for v in arg_validators[arg_name]:
+      for arg_name, value in bound_args.arguments.items():
+        if arg_name in arg_validators:
+          for v in arg_validators[arg_name]:
+            try:
               v.validate(value)
-      except Exception as e:
-        if warn_only:
-          logger.error(f"Validation failed for {func.__name__}: {e}")
-          return None
-        raise
+            except Exception as e:
+              validator_name = type(v).__name__
+              msg = (
+                f"Validation failed for parameter '{arg_name}' "
+                f"in '{func.__name__}' ({validator_name}): {e}"
+              )
+              if warn_only:
+                logger.error(msg)
+                return None
+              raise type(e)(msg) from e
 
       return func(*args, **kwargs)
 

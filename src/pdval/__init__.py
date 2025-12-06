@@ -1,6 +1,6 @@
 """pdval - Pandas validation using Annotated types and decorators."""
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 
 # Base classes
 from pdval.base import Validated, Validator, ValidatorMarker
