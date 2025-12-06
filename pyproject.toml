@@ -21,6 +21,8 @@ dev = [
     "ruff>=0.1.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "build>=0.10.0", # Added for package building
+    "twine>=4.0.0", # Added for package distribution checking and uploading
 ]
 
 [tool.setuptools.packages.find]
