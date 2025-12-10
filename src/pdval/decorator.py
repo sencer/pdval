@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
 import typing
@@ -111,8 +112,9 @@ def validated[**P, R](
     sig = inspect.signature(func)
     type_hints = typing.get_type_hints(func, include_extras=True)
 
-    # Pre-compute validators for each argument
+    # Pre-compute validators and base types for each argument
     arg_validators: dict[str, list[Validator[Any]]] = {}  # type: ignore[misc]
+    arg_base_types: dict[str, type] = {}
     for name in sig.parameters:
       if name in type_hints:
         hint = type_hints[name]
@@ -192,6 +194,9 @@ def validated[**P, R](
           if validators:
             arg_validators[name] = validators
 
+          # Store the base type for runtime type checking
+          arg_base_types[name] = annotated_type
+
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
       # Check for skip_validation in kwargs
@@ -208,6 +213,26 @@ def validated[**P, R](
 
       # Validate arguments
       for arg_name, value in bound_args.arguments.items():
+        # Check base type first (skip if value is None - Optional types allow None)
+        if arg_name in arg_base_types and value is not None:
+          expected_type = arg_base_types[arg_name]
+          # Handle generic types by extracting origin
+          check_type = get_origin(expected_type) or expected_type
+          # Check if check_type is valid for isinstance
+          is_valid_type = False
+          with contextlib.suppress(TypeError):
+            is_valid_type = isinstance(check_type, type)
+          if is_valid_type and not isinstance(value, check_type):
+            msg = (
+              f"Type mismatch for parameter '{arg_name}' "
+              f"in '{func.__name__}': expected {expected_type.__name__}, "
+              f"got {type(value).__name__}"
+            )
+            if warn_only:
+              logger.error(msg)
+              return None
+            raise TypeError(msg)
+
         if arg_name in arg_validators:
           for v in arg_validators[arg_name]:
             try:

@@ -50,6 +50,22 @@ class TestValidatedDecorator:
     with pytest.raises(ValueError, match="must be finite"):
       process(invalid_data)
 
+  def test_function_rejects_wrong_type(self):
+    """Test @validated decorator rejects wrong base type."""
+
+    @validated
+    def process(data: Validated[pd.Series, Finite]):
+      return data.sum()
+
+    # DataFrame instead of Series should raise TypeError
+    wrong_type = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
+    with pytest.raises(TypeError, match="expected Series, got DataFrame"):
+      process(wrong_type)
+
+    # List instead of Series should raise TypeError
+    with pytest.raises(TypeError, match="expected Series, got list"):
+      process([1.0, 2.0, 3.0])
+
   def test_error_message_includes_context(self):
     """Test that error messages include function name, parameter name, and validator."""
 
